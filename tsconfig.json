@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": true,
+    "lib": ["es2023", "dom"],
+    "module": "NodeNext",
+    "outDir": "./dist",
+    "rewriteRelativeImportExtensions": true,
+    "target": "es2022",
+    "types": ["vitest/globals", "node", "dom"]
+  },
+  // These may be different for your repo:
+  "include": ["./src"],
+  "exclude": ["**/*/*.test.*", "node_modules", "dist"]
+}
