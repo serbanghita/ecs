@@ -1,5 +1,5 @@
-import World from "./World.ts";
-import { PositionOnScreen, Renderable } from "./fixtures.ts";
+import World from "../World.ts";
+import { PositionOnScreen, Renderable } from "../fixtures.ts";
 
 describe("World", () => {
   let world: World;

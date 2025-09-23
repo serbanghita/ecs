@@ -1,7 +1,7 @@
-import Query from "./Query.ts";
-import ComponentRegistry from "./ComponentRegistry.ts";
-import World from "./World.ts";
-import { Keyboard, Body, PositionOnScreen, Renderable } from "./fixtures.ts";
+import Query from "../Query.ts";
+import ComponentRegistry from "../ComponentRegistry.ts";
+import World from "../World.ts";
+import { Keyboard, Body, PositionOnScreen, Renderable } from "../fixtures.ts";
 
 describe("Query", () => {
   const world = new World();
