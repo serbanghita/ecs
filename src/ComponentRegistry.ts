@@ -1,5 +1,6 @@
 // create a singleton class
 import Component from "./Component.ts";
+import { addBit } from "@serbanghita-gamedev/bitmask";
 
 type ComponentConstructor<TProps extends NonNullable<object>, TComp extends Component<TProps>> = new (properties: TProps) => TComp;
 
@@ -8,6 +9,8 @@ export default class ComponentRegistry {
 
   private bitmask: bigint = 1n;
   private components: Map<string, typeof Component> = new Map();
+  private componentGroups: Map<string, { components: (typeof Component)[]; bitmask: bigint }> = new Map();
+  private componentToGroupMap: Map<bigint, string> = new Map();
 
   private constructor() {}
 
@@ -46,7 +49,28 @@ export default class ComponentRegistry {
     return component;
   }
 
+  public registerComponentGroup<T extends Array<ComponentConstructor<any, any>>>(groupName: string, components: [...T]) {
+    let groupBitmask = 0n;
+    for (const component of components) {
+      groupBitmask = addBit(groupBitmask, component.prototype.bitmask);
+      this.componentToGroupMap.set(component.prototype.bitmask, groupName);
+    }
+    this.componentGroups.set(groupName, { components, bitmask: groupBitmask });
+  }
+
+  public getComponentGroup(groupName: string): { components: (typeof Component)[]; bitmask: bigint } | undefined {
+    return this.componentGroups.get(groupName);
+  }
+
+  public getComponentGroupName(componentBitmask: bigint): string | undefined {
+    return this.componentToGroupMap.get(componentBitmask);
+  }
+
   public getLastBitmask() {
     return this.bitmask;
+  }
+
+  public reset() {
+    ComponentRegistry.instance = new ComponentRegistry();
   }
 }
