@@ -2,17 +2,22 @@ import Entity from "../Entity.ts";
 import ComponentRegistry from "../ComponentRegistry.ts";
 import World from "../World.ts";
 import { Body, PositionOnScreen } from "../fixtures.ts";
+import { afterEach } from "vitest";
 
 describe("Entity", () => {
   let world: World;
+  let registry: ComponentRegistry = ComponentRegistry.getInstance();
   beforeEach(() => {
     world = new World();
   });
 
+  afterEach(() => {
+    registry.reset();
+  });
+
   it("addComponent", () => {
-    const reg = ComponentRegistry.getInstance();
-    reg.registerComponent(Body);
-    reg.registerComponent(PositionOnScreen);
+    registry.registerComponent(Body);
+    registry.registerComponent(PositionOnScreen);
 
     const entity = new Entity(world, "test");
     const spy = vi.spyOn(world, "notifyQueriesOfEntityComponentAddition");
@@ -27,8 +32,7 @@ describe("Entity", () => {
   });
 
   it("getComponent", () => {
-    const reg = ComponentRegistry.getInstance();
-    reg.registerComponent(Body);
+    registry.registerComponent(Body);
 
     const entity = new Entity(world, "test");
     entity.addComponent(Body, { width: 10, height: 20 }); // 1n
@@ -40,8 +44,7 @@ describe("Entity", () => {
   });
 
   it("getComponentByName", () => {
-    const reg = ComponentRegistry.getInstance();
-    reg.registerComponent(Body);
+    registry.registerComponent(Body);
 
     const entity = new Entity(world, "test");
     entity.addComponent(Body, { width: 10, height: 20 });
@@ -50,21 +53,20 @@ describe("Entity", () => {
   });
 
   it("removeComponent", () => {
-    const reg = ComponentRegistry.getInstance();
-    reg.registerComponent(Body);
+    registry.registerComponent(Body);
 
     const entity = new Entity(world, "test");
     const spy = vi.spyOn(world, "notifyQueriesOfEntityComponentRemoval");
     entity.addComponent(Body, { width: 10, height: 20 });
+    const instanceOfComp = entity.getComponent(Body);
     entity.removeComponent(Body);
-    expect(spy).toHaveBeenCalledWith(entity, entity.getComponent(Body));
+    expect(spy).toHaveBeenCalledWith(entity, instanceOfComp);
 
     expect(entity.hasComponent(Body)).toBe(false);
   });
 
   it("getComponent exception", () => {
-    const reg = ComponentRegistry.getInstance();
-    reg.registerComponent(Body);
+    registry.registerComponent(Body);
 
     const entity = new Entity(world, "test");
     entity.addComponent(Body, { width: 10, height: 20 }); // 1n
@@ -73,9 +75,8 @@ describe("Entity", () => {
   });
 
   it("hasComponent", () => {
-    const reg = ComponentRegistry.getInstance();
-    reg.registerComponent(Body);
-    reg.registerComponent(PositionOnScreen);
+    registry.registerComponent(Body);
+    registry.registerComponent(PositionOnScreen);
 
     const entity = new Entity(world, "test");
     entity.addComponent(Body, { width: 10, height: 20 }); // 1n
