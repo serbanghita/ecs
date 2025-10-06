@@ -1,16 +1,20 @@
-// create a singleton class
 import Component from "./Component.ts";
 import { addBit } from "@serbanghita-gamedev/bitmask";
 
 type ComponentConstructor<TProps extends NonNullable<object>, TComp extends Component<TProps>> = new (properties: TProps) => TComp;
+
+export type ComponentGroupOptions = {
+  mutuallyExclusive?: boolean;
+};
 
 export default class ComponentRegistry {
   private static instance: ComponentRegistry;
 
   private bitmask: bigint = 1n;
   private components: Map<string, typeof Component> = new Map();
-  private componentGroups: Map<string, { components: (typeof Component)[]; bitmask: bigint }> = new Map();
+  private componentGroups: Map<string, { components: (typeof Component)[]; bitmask: bigint; options: ComponentGroupOptions }> = new Map();
   private componentToGroupMap: Map<bigint, string> = new Map();
+  private bitmaskToComponentMap: Map<bigint, typeof Component> = new Map();
 
   private constructor() {}
 
@@ -23,11 +27,13 @@ export default class ComponentRegistry {
 
   public registerComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp) {
     if (componentDeclaration.prototype && typeof componentDeclaration.prototype === "object") {
+      const newBitmask = (this.bitmask <<= 1n);
       Object.defineProperty(componentDeclaration.prototype, "bitmask", {
-        value: (this.bitmask <<= 1n),
+        value: newBitmask,
         writable: true,
         configurable: true,
       });
+      this.bitmaskToComponentMap.set(newBitmask, componentDeclaration as typeof Component);
     }
     this.components.set(componentDeclaration.prototype.constructor.name, componentDeclaration as typeof Component);
 
@@ -49,16 +55,20 @@ export default class ComponentRegistry {
     return component;
   }
 
-  public registerComponentGroup<T extends Array<ComponentConstructor<any, any>>>(groupName: string, components: [...T]) {
+  public getComponentByBitmask(bitmask: bigint): typeof Component | undefined {
+    return this.bitmaskToComponentMap.get(bitmask);
+  }
+
+  public registerComponentGroup<T extends Array<ComponentConstructor<any, any>>>(groupName: string, components: [...T], options: ComponentGroupOptions = {}) {
     let groupBitmask = 0n;
     for (const component of components) {
       groupBitmask = addBit(groupBitmask, component.prototype.bitmask);
       this.componentToGroupMap.set(component.prototype.bitmask, groupName);
     }
-    this.componentGroups.set(groupName, { components, bitmask: groupBitmask });
+    this.componentGroups.set(groupName, { components, bitmask: groupBitmask, options });
   }
 
-  public getComponentGroup(groupName: string): { components: (typeof Component)[]; bitmask: bigint } | undefined {
+  public getComponentGroup(groupName: string): { components: (typeof Component)[]; bitmask: bigint; options: ComponentGroupOptions } | undefined {
     return this.componentGroups.get(groupName);
   }
 
