@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "esbuild ./src/index.ts --bundle --outfile=dist/ecs.js  --keep-names",
+    "build:example": "esbuild ./src/example.ts --bundle --outfile=dist/example.js --keep-names",
     "test": "vitest --watch=false",
     "lint": "eslint ./src"
   },

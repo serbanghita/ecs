@@ -11,5 +11,5 @@
   },
   // These may be different for your repo:
   "include": ["./src"],
-  "exclude": ["**/*/*.test.*", "node_modules", "dist"]
+  "exclude": ["**/*/*.test.*", "node_modules", "dist", "src/example.ts"]
 }
