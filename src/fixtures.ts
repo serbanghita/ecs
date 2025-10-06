@@ -1,5 +1,23 @@
 import Component from "./Component.ts";
 
+export class Idle extends Component<Record<string, never>> {
+  constructor(public properties: Record<string, never>) {
+    super(properties);
+  }
+}
+
+export class Walking extends Component<Record<string, never>> {
+  constructor(public properties: Record<string, never>) {
+    super(properties);
+  }
+}
+
+export class Attacking extends Component<Record<string, never>> {
+  constructor(public properties: Record<string, never>) {
+    super(properties);
+  }
+}
+
 export class Renderable extends Component<Record<string, never>> {
   constructor(public properties: Record<string, never>) {
     super(properties);
