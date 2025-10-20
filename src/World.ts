@@ -4,7 +4,6 @@ import System from "./System.ts";
 import Query, { IQueryFilters } from "./Query.ts";
 import Component from "./Component.ts";
 import ComponentRegistry from "./ComponentRegistry.ts";
-// import { EntityDeclaration } from "@serbanghita-gamedev/assets";
 
 export type WorldStartOptions = {
   // Limit the FPS.
@@ -64,21 +63,6 @@ export default class World {
     }
     return query;
   }
-
-  // public createEntityFromDeclaration(id: string, entityDeclaration: EntityDeclaration): Entity {
-  //   // Create the entity and assign it to the world.
-  //   const entity = this.createEntity(id);
-  //
-  //   // Add Component(s) to the Entity.
-  //   for (const name in entityDeclaration.components) {
-  //     const componentDeclaration = this.declarations.components.getComponent(name);
-  //     const props = entityDeclaration.components[name];
-  //
-  //     entity.addComponent(componentDeclaration, props);
-  //   }
-  //
-  //   return entity;
-  // }
 
   public createEntity(id: string): Entity {
     if (this.entities.has(id)) {
