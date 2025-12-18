@@ -17,6 +17,8 @@
   "scripts": {
     "build": "esbuild ./src/index.ts --bundle --outfile=dist/ecs.js  --keep-names",
     "build:example": "esbuild ./src/example.ts --bundle --outfile=dist/example.js --keep-names",
+    "build:demo": "esbuild ./src/demo/demo.ts --bundle --outfile=dist/demo.js --keep-names --sourcemap",
+    "dev:demo": "esbuild ./src/demo/demo.ts --bundle --outfile=dist/demo.js --keep-names --sourcemap --watch --servedir=dist --serve=8080",
     "test": "vitest --watch=false",
     "lint": "eslint ./src"
   },
