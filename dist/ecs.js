@@ -20,50 +20,6 @@
     }
   };
 
-  // src/ComponentRegistry.ts
-  var ComponentRegistry = class _ComponentRegistry {
-    static {
-      __name(this, "ComponentRegistry");
-    }
-    static instance;
-    bitmask = 1n;
-    components = /* @__PURE__ */ new Map();
-    constructor() {
-    }
-    static getInstance() {
-      if (!_ComponentRegistry.instance) {
-        _ComponentRegistry.instance = new _ComponentRegistry();
-      }
-      return _ComponentRegistry.instance;
-    }
-    registerComponent(componentDeclaration) {
-      if (componentDeclaration.prototype && typeof componentDeclaration.prototype === "object") {
-        Object.defineProperty(componentDeclaration.prototype, "bitmask", {
-          value: this.bitmask <<= 1n,
-          writable: true,
-          configurable: true
-        });
-      }
-      this.components.set(componentDeclaration.prototype.constructor.name, componentDeclaration);
-      return componentDeclaration;
-    }
-    registerComponents(componentDeclarations) {
-      componentDeclarations.forEach((declaration) => {
-        this.registerComponent(declaration);
-      });
-    }
-    getComponent(name) {
-      const component = this.components.get(name);
-      if (!component) {
-        throw new Error(`Component requested ${name} is non-existent.`);
-      }
-      return component;
-    }
-    getLastBitmask() {
-      return this.bitmask;
-    }
-  };
-
   // node_modules/@serbanghita-gamedev/bitmask/src/bitmask.ts
   function addBit(bitmasks, bit) {
     bitmasks |= bit;
@@ -84,6 +40,75 @@
   }
   __name(hasAnyOfBits, "hasAnyOfBits");
 
+  // src/ComponentRegistry.ts
+  var ComponentRegistry = class _ComponentRegistry {
+    static {
+      __name(this, "ComponentRegistry");
+    }
+    static instance;
+    bitmask = 1n;
+    components = /* @__PURE__ */ new Map();
+    componentGroups = /* @__PURE__ */ new Map();
+    componentToGroupMap = /* @__PURE__ */ new Map();
+    bitmaskToComponentMap = /* @__PURE__ */ new Map();
+    constructor() {
+    }
+    static getInstance() {
+      if (!_ComponentRegistry.instance) {
+        _ComponentRegistry.instance = new _ComponentRegistry();
+      }
+      return _ComponentRegistry.instance;
+    }
+    registerComponent(componentDeclaration) {
+      if (componentDeclaration.prototype && typeof componentDeclaration.prototype === "object") {
+        const newBitmask = this.bitmask <<= 1n;
+        Object.defineProperty(componentDeclaration.prototype, "bitmask", {
+          value: newBitmask,
+          writable: true,
+          configurable: true
+        });
+        this.bitmaskToComponentMap.set(newBitmask, componentDeclaration);
+      }
+      this.components.set(componentDeclaration.prototype.constructor.name, componentDeclaration);
+      return componentDeclaration;
+    }
+    registerComponents(componentDeclarations) {
+      componentDeclarations.forEach((declaration) => {
+        this.registerComponent(declaration);
+      });
+    }
+    getComponent(name) {
+      const component = this.components.get(name);
+      if (!component) {
+        throw new Error(`Component requested ${name} is non-existent.`);
+      }
+      return component;
+    }
+    getComponentByBitmask(bitmask) {
+      return this.bitmaskToComponentMap.get(bitmask);
+    }
+    registerComponentGroup(groupName, components, options = {}) {
+      let groupBitmask = 0n;
+      for (const component of components) {
+        groupBitmask = addBit(groupBitmask, component.prototype.bitmask);
+        this.componentToGroupMap.set(component.prototype.bitmask, groupName);
+      }
+      this.componentGroups.set(groupName, { components, bitmask: groupBitmask, options });
+    }
+    getComponentGroup(groupName) {
+      return this.componentGroups.get(groupName);
+    }
+    getComponentGroupName(componentBitmask) {
+      return this.componentToGroupMap.get(componentBitmask);
+    }
+    getLastBitmask() {
+      return this.bitmask;
+    }
+    reset() {
+      _ComponentRegistry.instance = new _ComponentRegistry();
+    }
+  };
+
   // src/Entity.ts
   var Entity = class {
     constructor(world, id) {
@@ -93,9 +118,7 @@
     static {
       __name(this, "Entity");
     }
-    // Bitmask for storing Entity's components.
     componentsBitmask = 0n;
-    // Cache of Component instances.
     components = /* @__PURE__ */ new Map();
     addComponent(componentDeclaration, properties) {
       let instance = this.components.get(componentDeclaration.name);
@@ -106,6 +129,20 @@
       }
       if (typeof instance.bitmask === "undefined") {
         throw new Error(`Please register the component ${instance.constructor.name} in the ComponentRegistry.`);
+      }
+      const componentRegistry = this.world.declarations.components;
+      const groupName = componentRegistry.getComponentGroupName(instance.bitmask);
+      if (groupName) {
+        const group = componentRegistry.getComponentGroup(groupName);
+        if (group && group.options.mutuallyExclusive) {
+          const conflictingBitmask = this.componentsBitmask & group.bitmask;
+          if (conflictingBitmask !== 0n) {
+            const conflictingComponent = componentRegistry.getComponentByBitmask(conflictingBitmask);
+            if (conflictingComponent) {
+              this.removeComponent(conflictingComponent);
+            }
+          }
+        }
       }
       this.components.set(componentDeclaration.name, instance);
       this.componentsBitmask = addBit(this.componentsBitmask, instance.bitmask);
@@ -135,6 +172,7 @@
         throw new Error(`Component ${componentDeclaration.name} has no bitmask.`);
       }
       this.componentsBitmask = removeBit(this.componentsBitmask, component.bitmask);
+      this.components.delete(componentDeclaration.name);
       this.onRemoveComponent(component);
       return this;
     }
@@ -217,7 +255,7 @@
      */
     execute() {
       if (!this.hasExecuted) {
-        this.dataSet = new Map([...this.dataSet].filter(([id, entity]) => this.match(entity)));
+        this.dataSet = new Map([...this.dataSet].filter(([, entity]) => this.match(entity)));
         this.hasExecuted = true;
       }
       return this.dataSet;
@@ -226,11 +264,11 @@
       if (this.none !== 0n && hasAnyOfBits(entity.componentsBitmask, this.none)) {
         return false;
       }
-      if (this.any !== 0n) {
-        return hasAnyOfBits(entity.componentsBitmask, this.any);
+      if (this.all !== 0n && !hasBit(entity.componentsBitmask, this.all)) {
+        return false;
       }
-      if (this.all !== 0n) {
-        return hasBit(entity.componentsBitmask, this.all);
+      if (this.any !== 0n && !hasAnyOfBits(entity.componentsBitmask, this.any)) {
+        return false;
       }
       return true;
     }
@@ -333,20 +371,6 @@
       }
       return query;
     }
-    // public createEntityFromDeclaration(id: string, entityDeclaration: EntityDeclaration): Entity {
-    //   // Create the entity and assign it to the world.
-    //   const entity = this.createEntity(id);
-    //
-    //   // Add Component(s) to the Entity.
-    //   for (const name in entityDeclaration.components) {
-    //     const componentDeclaration = this.declarations.components.getComponent(name);
-    //     const props = entityDeclaration.components[name];
-    //
-    //     entity.addComponent(componentDeclaration, props);
-    //   }
-    //
-    //   return entity;
-    // }
     createEntity(id) {
       if (this.entities.has(id)) {
         throw new Error(`Entity with the id "${id}" already exists.`);
@@ -395,20 +419,26 @@
     /**
      * 1. Finds all Queries that have the Component in their filter.
      * 2. Add candidacy of the Entity to the list of Entities inside the Query.
+     * 3. Remove Entity from Queries that have the Component in their 'none' filter.
      *
      * @param entity
      * @param component
      */
     notifyQueriesOfEntityComponentAddition(entity, component) {
       this.queries.forEach((query) => {
-        if (hasBit(query.all, component.bitmask)) {
-          query.add(entity);
+        if (hasBit(query.none, component.bitmask)) {
+          query.remove(entity);
+          return;
+        }
+        if (hasBit(query.all, component.bitmask) || hasBit(query.any, component.bitmask)) {
+          query.candidate(entity);
         }
       });
     }
     /**
      * 1. Finds all Queries that have the Component in their filter.
      * 2. Remove the Entity from the list of Entities inside the Query.
+     * 3. Re-evaluate Entity candidacy for Queries that have the Component in their 'none' filter.
      *
      * @param entity
      * @param component
@@ -417,6 +447,15 @@
       this.queries.forEach((query) => {
         if (hasBit(query.all, component.bitmask)) {
           query.remove(entity);
+          return;
+        }
+        if (hasBit(query.any, component.bitmask)) {
+          query.remove(entity);
+          query.candidate(entity);
+          return;
+        }
+        if (hasBit(query.none, component.bitmask)) {
+          query.candidate(entity);
         }
       });
     }

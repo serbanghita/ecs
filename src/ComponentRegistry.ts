@@ -1,4 +1,4 @@
-import Component from "./Component.ts";
+import { Component } from "./Component.ts";
 import { addBit } from "@serbanghita-gamedev/bitmask";
 
 type ComponentConstructor<TProps extends NonNullable<object>, TComp extends Component<TProps>> = new (properties: TProps) => TComp;
@@ -7,7 +7,7 @@ export type ComponentGroupOptions = {
   mutuallyExclusive?: boolean;
 };
 
-export default class ComponentRegistry {
+export class ComponentRegistry {
   private static instance: ComponentRegistry;
 
   private bitmask: bigint = 1n;

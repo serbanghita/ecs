@@ -1,9 +1,9 @@
 /** This iw WIP, please ignore **/
-import World from "./World.ts";
-import Entity from "./Entity.ts";
-import ComponentRegistry from "./ComponentRegistry.ts";
+import { World } from "./World.ts";
+import { Entity } from "./Entity.ts";
+import { ComponentRegistry } from "./ComponentRegistry.ts";
 import { Attacking, Body, Idle, Keyboard, PositionOnScreen, Walking } from "./fixtures.ts";
-import System from "./System.ts";
+import { System } from "./System.ts";
 
 class CollisionSystem extends System {
   private doSomeChecks(entity: Entity) {

@@ -1,8 +1,8 @@
 // src/tests/ComponentGroup.test.ts
 import { describe, it, expect, beforeEach } from "vitest";
-import World from "../World.ts";
+import { World } from "../World.ts";
 import { Idle, Walking, Attacking } from "../fixtures.ts";
-import ComponentRegistry from "../ComponentRegistry.ts";
+import { ComponentRegistry } from "../ComponentRegistry.ts";
 
 describe("Component Groups", () => {
   let world: World;

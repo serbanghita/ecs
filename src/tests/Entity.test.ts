@@ -1,12 +1,12 @@
-import Entity from "../Entity.ts";
-import ComponentRegistry from "../ComponentRegistry.ts";
-import World from "../World.ts";
+import { Entity } from "../Entity.ts";
+import { ComponentRegistry } from "../ComponentRegistry.ts";
+import { World } from "../World.ts";
 import { Body, PositionOnScreen } from "../fixtures.ts";
 import { afterEach } from "vitest";
 
 describe("Entity", () => {
   let world: World;
-  let registry: ComponentRegistry = ComponentRegistry.getInstance();
+  const registry: ComponentRegistry = ComponentRegistry.getInstance();
   beforeEach(() => {
     world = new World();
   });

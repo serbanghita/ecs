@@ -1,9 +1,9 @@
 import { hasBit } from "@serbanghita-gamedev/bitmask";
-import Entity from "./Entity.ts";
-import System from "./System.ts";
-import Query, { IQueryFilters } from "./Query.ts";
-import Component from "./Component.ts";
-import ComponentRegistry from "./ComponentRegistry.ts";
+import { Entity } from "./Entity.ts";
+import { System } from "./System.ts";
+import { Query, IQueryFilters } from "./Query.ts";
+import { Component } from "./Component.ts";
+import { ComponentRegistry } from "./ComponentRegistry.ts";
 
 export type WorldStartOptions = {
   // Limit the FPS.
@@ -12,7 +12,7 @@ export type WorldStartOptions = {
   callbackFnAfterSystemsUpdate?: () => void;
 };
 
-export default class World {
+export class World {
   public declarations = {
     components: ComponentRegistry.getInstance(),
   };
@@ -92,8 +92,8 @@ export default class World {
     this.entities.delete(id);
   }
 
-  public createSystem(systemDeclaration: typeof System, query: Query, ...args: unknown[]): System {
-    const systemInstance = new systemDeclaration(this, query, ...args);
+  public createSystem<T extends typeof System>(systemDeclaration: T, query: Query, ...args: unknown[]): InstanceType<T> {
+    const systemInstance = new systemDeclaration(this, query, ...args) as InstanceType<T>;
     this.systems.set(systemDeclaration, systemInstance);
 
     return systemInstance;
@@ -128,14 +128,21 @@ export default class World {
   /**
    * 1. Finds all Queries that have the Component in their filter.
    * 2. Add candidacy of the Entity to the list of Entities inside the Query.
+   * 3. Remove Entity from Queries that have the Component in their 'none' filter.
    *
    * @param entity
    * @param component
    */
   public notifyQueriesOfEntityComponentAddition<T extends NonNullable<object>>(entity: Entity, component: Component<T>) {
     this.queries.forEach((query) => {
-      if (hasBit(query.all, component.bitmask as bigint)) {
-        query.add(entity);
+      // If component is in 'none', remove entity from query
+      if (hasBit(query.none, component.bitmask as bigint)) {
+        query.remove(entity);
+        return;
+      }
+      // If component is in 'all' or 'any', re-evaluate entity candidacy
+      if (hasBit(query.all, component.bitmask as bigint) || hasBit(query.any, component.bitmask as bigint)) {
+        query.candidate(entity);
       }
     });
   }
@@ -143,14 +150,28 @@ export default class World {
   /**
    * 1. Finds all Queries that have the Component in their filter.
    * 2. Remove the Entity from the list of Entities inside the Query.
+   * 3. Re-evaluate Entity candidacy for Queries that have the Component in their 'none' filter.
    *
    * @param entity
    * @param component
    */
   public notifyQueriesOfEntityComponentRemoval<T extends NonNullable<object>>(entity: Entity, component: Component<T>) {
     this.queries.forEach((query) => {
+      // If component is in 'all', remove entity from query
       if (hasBit(query.all, component.bitmask as bigint)) {
         query.remove(entity);
+        return;
+      }
+      // If component is in 'any', re-evaluate (entity may no longer have any of the required components)
+      if (hasBit(query.any, component.bitmask as bigint)) {
+        // Remove and re-candidate to properly check if entity still matches
+        query.remove(entity);
+        query.candidate(entity);
+        return;
+      }
+      // If component is in 'none', re-evaluate entity candidacy
+      if (hasBit(query.none, component.bitmask as bigint)) {
+        query.candidate(entity);
       }
     });
   }

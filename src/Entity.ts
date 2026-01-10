@@ -1,9 +1,9 @@
 // src/Entity.ts
 import { addBit, hasBit, removeBit } from "@serbanghita-gamedev/bitmask";
-import Component from "./Component.ts";
-import World from "./World.ts";
+import { Component } from "./Component.ts";
+import { World } from "./World.ts";
 
-export default class Entity {
+export class Entity {
   public componentsBitmask = 0n;
   public components: Map<string, Component<NonNullable<object>>> = new Map();
 

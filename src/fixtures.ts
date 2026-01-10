@@ -1,4 +1,4 @@
-import Component from "./Component.ts";
+import { Component } from "./Component.ts";
 
 export class Idle extends Component<Record<string, never>> {
   constructor(public properties: Record<string, never>) {

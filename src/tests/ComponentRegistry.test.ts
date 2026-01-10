@@ -1,4 +1,4 @@
-import ComponentRegistry from "../ComponentRegistry.ts";
+import { ComponentRegistry } from "../ComponentRegistry.ts";
 import { Body, Keyboard, PositionOnScreen } from "../fixtures.ts";
 import { afterAll, afterEach, describe } from "vitest";
 

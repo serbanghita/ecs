@@ -1,6 +1,6 @@
-import Entity from "./Entity.ts";
-import Component from "./Component.ts";
-import World from "./World.ts";
+import { Entity } from "./Entity.ts";
+import { Component } from "./Component.ts";
+import { World } from "./World.ts";
 import { addBit, hasAnyOfBits, hasBit } from "@serbanghita-gamedev/bitmask";
 
 //type ComponentInQuery = new <TProps extends Record<string, never>, TComp extends Component<TProps>>(properties: TProps) => TComp;
@@ -18,7 +18,7 @@ export interface IQueryFiltersBitmask {
   none: bigint;
 }
 
-export default class Query {
+export class Query {
   public all = 0n;
   public any = 0n;
   public none = 0n;
@@ -87,7 +87,7 @@ export default class Query {
    */
   public execute(): Map<string, Entity> {
     if (!this.hasExecuted) {
-      this.dataSet = new Map([...this.dataSet].filter(([id, entity]) => this.match(entity)));
+      this.dataSet = new Map([...this.dataSet].filter(([, entity]) => this.match(entity)));
       this.hasExecuted = true;
     }
 
@@ -95,21 +95,22 @@ export default class Query {
   }
 
   private match(entity: Entity): boolean {
-    // Reject all entities that have a component(s) that is in the none filter.
+    // Reject if entity has ANY component in the "none" filter
     if (this.none !== 0n && hasAnyOfBits(entity.componentsBitmask, this.none)) {
       return false;
     }
 
-    // Include any entity that has all the components in the "any" filter.
-    if (this.any !== 0n) {
-      return hasAnyOfBits(entity.componentsBitmask, this.any);
+    // Reject if entity doesn't have ALL components in the "all" filter
+    if (this.all !== 0n && !hasBit(entity.componentsBitmask, this.all)) {
+      return false;
     }
 
-    // Check all bits.
-    if (this.all !== 0n) {
-      return hasBit(entity.componentsBitmask, this.all);
+    // Reject if entity doesn't have ANY component in the "any" filter (when specified)
+    if (this.any !== 0n && !hasAnyOfBits(entity.componentsBitmask, this.any)) {
+      return false;
     }
 
+    // All checks passed
     return true;
   }
 

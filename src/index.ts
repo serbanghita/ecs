@@ -1,12 +1,6 @@
-import Component from "./Component.ts";
-import ComponentRegistry from "./ComponentRegistry.ts";
-import Entity from "./Entity.ts";
-import Query, { IQueryFilters } from "./Query.ts";
-import System from "./System.ts";
-import World from "./World.ts";
-
-export {
-    Component, ComponentRegistry,
-    Entity, Query, IQueryFilters,
-    System, World
-}
+export { Component } from "./Component.ts";
+export { ComponentRegistry } from "./ComponentRegistry.ts";
+export { Entity } from "./Entity.ts";
+export { Query, IQueryFilters } from "./Query.ts";
+export { System } from "./System.ts";
+export { World } from "./World.ts";

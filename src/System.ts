@@ -1,5 +1,5 @@
-import World from "./World.ts";
-import Query from "./Query.ts";
+import { World } from "./World.ts";
+import { Query } from "./Query.ts";
 
 // export type SystemConstructor = new (world: World, properties?: {}) => System;
 
@@ -10,7 +10,7 @@ export type SystemSettings = {
   runEveryTicks: number;
 };
 
-export default class System {
+export class System {
   public settings: SystemSettings = { ticksToRunBeforeExit: -1, runEveryTicks: 0 };
   public ticks: number = 0;
 
