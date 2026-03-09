@@ -27,6 +27,8 @@ export class World {
   public fpsCapDuration: number = 0;
   public callbackFnAfterSystemsUpdate: (() => void) | undefined = undefined;
   public now: DOMHighResTimeStamp = 0;
+  private _animationFrameId: number = 0;
+  private _paused: boolean = false;
 
   // Shortcut to ComponentRegistry
   public registerComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp) {
@@ -210,6 +212,17 @@ export class World {
 
     const loop = (now: DOMHighResTimeStamp) => {
       this.now = now;
+
+      if (this._paused) {
+        // Keep the loop alive but skip everything; reset lastFrameTime
+        // so the first frame after resume doesn't get a huge delta.
+        lastFrameTime = 0;
+        lastFpsTime = 0;
+        frames = 0;
+        this._animationFrameId = requestAnimationFrame(loop);
+        return;
+      }
+
       frames++;
 
       // Last frame time.
@@ -259,9 +272,32 @@ export class World {
 
       this.frameNo = frames;
 
-      requestAnimationFrame(loop);
+      this._animationFrameId = requestAnimationFrame(loop);
     };
 
-    requestAnimationFrame(loop);
+    this._animationFrameId = requestAnimationFrame(loop);
+  }
+
+  public pause() {
+    this._paused = true;
+  }
+
+  public resume() {
+    this._paused = false;
+  }
+
+  public stop() {
+    if (this._animationFrameId) {
+      cancelAnimationFrame(this._animationFrameId);
+      this._animationFrameId = 0;
+    }
+  }
+
+  public clear() {
+    this.stop();
+    this.entities.clear();
+    this.queries.clear();
+    this.systems.clear();
+    this.callbackFnAfterSystemsUpdate = undefined;
   }
 }
