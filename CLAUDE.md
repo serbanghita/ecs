@@ -1,42 +1,68 @@
-# ECS - an Entity Components Systems library
+# ECS - Entity Component System
 
-## Project Structure
+## Overview
 
-- `Component` - Base class for all components. Can be initiated via `constructor` or `init` (for lazy loading/instance reuse). Each component class has a `bitmask` property on its prototype.
-- `ComponentRegistry` - Singleton that registers Component class declarations and assigns unique bitmasks to their prototypes.
-- `ComponentGroup` - Groups multiple components together for batch operations.
-- `Entity` - Contains a map of Components and a bitmask signature of all attached Components. Notifies registered Queries when components are added/removed.
-- `Query` - Filters Entities based on their Components using `all`, `any`, `none` filters.
-- `System` - Abstract class where the `update` method must be overridden in child classes.
-- `World` - Main class that runs the game loop and wraps common operations.
-- `fixtures.ts` - Component class examples used in tests.
-- `index.ts` - Exports all public classes from the npm module.
+A TypeScript ECS library using bitmask-based component matching for fast entity filtering. Provides reactive queries that automatically update when entities gain or lose components.
 
-## Query Filter Semantics
+## Source Structure
 
-Queries support three filter types that can be combined:
+| File | Description |
+|------|-------------|
+| `src/Component.ts` | Base class for components with `properties` field and optional `init()` for reuse |
+| `src/ComponentRegistry.ts` | Singleton assigning unique bigint bitmasks to component classes |
+| `src/Entity.ts` | Container holding components and a bitmask signature; notifies queries on changes |
+| `src/Query.ts` | Filters entities using `all`/`any`/`none` bitmask filters; reactive updates |
+| `src/System.ts` | Abstract base class with `update(now)`, tick scheduling, pause support |
+| `src/World.ts` | Main orchestration: game loop via rAF, entity/query/system management, FPS |
+| `src/fixtures.ts` | Test fixture components (Idle, Walking, Attacking, Renderable, etc.) |
+| `src/index.ts` | Public API re-exports |
 
-- `all` - Entity must have ALL listed components
-- `any` - Entity must have AT LEAST ONE of the listed components
-- `none` - Entity must NOT have ANY of the listed components
+## Key Exports
 
-Filter evaluation order: `none` (most restrictive) -> `all` -> `any`
+| Export | Type | Description |
+|--------|------|-------------|
+| `Component<T>` | Class | Base class for typed components |
+| `ComponentRegistry` | Class | Singleton registry with `getInstance()` |
+| `Entity` | Class | Entity with component add/remove/get/has |
+| `Query` | Class | Reactive entity filter with `all`/`any`/`none` |
+| `System` | Class | Abstract system base class |
+| `World` | Class | Game loop orchestration |
+| `IQueryFilters` | Interface | `{ all?, any?, none? }` filter definition |
+| `SystemSettings` | Type | `{ ticksToRunBeforeExit, runEveryTicks }` |
+| `WorldStartOptions` | Type | `{ fpsCap?, callbackFnAfterSystemsUpdate? }` |
+| `ComponentGroupOptions` | Type | `{ mutuallyExclusive? }` |
 
-Queries are reactive - they automatically update when entities gain or lose components via the World notification system.
+## Dependencies
+
+| Package | Version |
+|---------|---------|
+| `@serbanghita-gamedev/bitmask` | ^1.1.0 |
 
 ## Development
 
-```bash
-npm install        # Install dependencies
-npm run build      # Build TypeScript to JavaScript
-npm run test       # Run tests (vitest)
-npm run lint       # Lint files (eslint)
-```
+| Command | What it does |
+|---------|-------------|
+| `npm install` | Install dependencies |
+| `npm run build` | Bundle with esbuild |
+| `npm run test` | Run tests (vitest) |
+| `npm run lint` | Lint (eslint) |
 
-Tests are located in `src/tests/` with a corresponding `.test.ts` file for each class.
+## Testing
+
+- Framework: Vitest
+- Tests: `src/tests/*.test.ts`
+- Fixtures: `src/fixtures.ts`
+
+## Query Filter Semantics
+
+- `all` — Entity must have ALL listed components
+- `any` — Entity must have AT LEAST ONE of the listed components
+- `none` — Entity must NOT have ANY of the listed components
+- Evaluation order: `none` (most restrictive) → `all` → `any`
+- Queries are reactive — auto-update when entities gain/lose components
 
 ## Coding Guidelines
 
-- When suggesting changes, consider ECS design paradigms and offer alternatives.
-- Ask for clarification when requirements are unclear.
+- Consider ECS design paradigms when suggesting changes.
 - Avoid unnecessary comments in code.
+- Components are plain data holders; logic goes in Systems.
