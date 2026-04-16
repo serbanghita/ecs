@@ -1,0 +1,16 @@
+# Dev/build tooling
+.claude/
+.editorconfig
+.prettierrc
+.prettierignore
+eslint.config.mjs
+tsconfig.json
+vite.config.ts
+
+# Tests
+src/tests/
+src/demo/
+
+# CI & docs
+.github/
+CLAUDE.md
