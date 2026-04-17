@@ -206,9 +206,8 @@ export class World {
     let lastFpsTime = 0;
 
     const fpsCap = this.fpsCap;
-    const fpsCapDurationTime = (this.fpsCapDuration = 1000 / fpsCap);
+    const fpsCapDurationTime = fpsCap > 0 ? 1000 / fpsCap : 0;
     let fpsCapLastFrameTime = 0;
-    let logicFrames = 0;
 
     const loop = (now: DOMHighResTimeStamp) => {
       this.now = now;
@@ -218,41 +217,43 @@ export class World {
         // so the first frame after resume doesn't get a huge delta.
         lastFrameTime = 0;
         lastFpsTime = 0;
+        fpsCapLastFrameTime = 0;
         frames = 0;
         this._animationFrameId = requestAnimationFrame(loop);
         return;
       }
 
+      // FPS cap: skip this frame entirely if not enough time has passed.
+      // Advances by fixed intervals (not resetting to `now`) to prevent drift
+      // on high-refresh-rate monitors where rAF jitter can cause missed frames.
+      if (fpsCap > 0) {
+        if (fpsCapLastFrameTime === 0) {
+          fpsCapLastFrameTime = now;
+        } else if (now - fpsCapLastFrameTime < fpsCapDurationTime) {
+          this._animationFrameId = requestAnimationFrame(loop);
+          return;
+        }
+        fpsCapLastFrameTime += fpsCapDurationTime;
+        // If we've fallen too far behind (e.g., tab was hidden), reset to now.
+        if (now - fpsCapLastFrameTime > fpsCapDurationTime) {
+          fpsCapLastFrameTime = now;
+        }
+      }
+
       frames++;
 
-      // Last frame time.
+      // Frame duration (delta time since last logic frame).
       if (lastFrameTime === 0) {
         lastFrameTime = now;
       }
       frameTimeDiff = now - lastFrameTime;
       lastFrameTime = now;
 
-      if (fpsCapLastFrameTime === 0) {
-        fpsCapLastFrameTime = now;
-      }
-      if (fpsCap > 0 && fps > fpsCap) {
-        logicFrames++;
-        if (now - fpsCapLastFrameTime >= fpsCapDurationTime) {
-          fpsCapLastFrameTime = now;
-          // frames++
-          if (fps > 0) {
-            this.systems.forEach((system) => system.update(now));
-          }
-          logicFrames = 0;
-        }
-      } else {
-        // frames++
-        if (fps > 0) {
-          this.systems.forEach((system) => system.update(now));
-        }
+      if (fps > 0) {
+        this.systems.forEach((system) => system.update(now));
       }
 
-      // Fps
+      // Fps counter (updates every second).
       if (lastFpsTime === 0) {
         lastFpsTime = now;
       }

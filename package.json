@@ -7,7 +7,7 @@
   ],
   "main": "./src/index.ts",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Serban Ghita <serbanghita@gmail.com> (https://ghita.org)",
   "license": "MIT",
   "publishConfig": {

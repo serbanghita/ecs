@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-04-17
+
 ### Fixed
 - Query notification fixes when components are added/removed from entities
+- `World` FPS cap loop rewritten to skip frames up-front and advance by fixed intervals, eliminating drift on high-refresh-rate monitors
+- Resolved security advisories in transitive dev dependencies (`ajv`, `brace-expansion`, `flatted`, `glob`, `js-yaml`, `minimatch`, `picomatch`, `rollup`, `vite`) via `npm audit fix`
 
 ### Added
 - CLAUDE.md documentation

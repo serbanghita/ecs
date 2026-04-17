@@ -344,6 +344,8 @@
     fpsCapDuration = 0;
     callbackFnAfterSystemsUpdate = void 0;
     now = 0;
+    _animationFrameId = 0;
+    _paused = false;
     // Shortcut to ComponentRegistry
     registerComponent(componentDeclaration) {
       this.declarations.components.registerComponent(componentDeclaration);
@@ -479,33 +481,38 @@
       let frames = 0;
       let lastFpsTime = 0;
       const fpsCap = this.fpsCap;
-      const fpsCapDurationTime = this.fpsCapDuration = 1e3 / fpsCap;
+      const fpsCapDurationTime = fpsCap > 0 ? 1e3 / fpsCap : 0;
       let fpsCapLastFrameTime = 0;
-      let logicFrames = 0;
       const loop = /* @__PURE__ */ __name((now) => {
         this.now = now;
+        if (this._paused) {
+          lastFrameTime = 0;
+          lastFpsTime = 0;
+          fpsCapLastFrameTime = 0;
+          frames = 0;
+          this._animationFrameId = requestAnimationFrame(loop);
+          return;
+        }
+        if (fpsCap > 0) {
+          if (fpsCapLastFrameTime === 0) {
+            fpsCapLastFrameTime = now;
+          } else if (now - fpsCapLastFrameTime < fpsCapDurationTime) {
+            this._animationFrameId = requestAnimationFrame(loop);
+            return;
+          }
+          fpsCapLastFrameTime += fpsCapDurationTime;
+          if (now - fpsCapLastFrameTime > fpsCapDurationTime) {
+            fpsCapLastFrameTime = now;
+          }
+        }
         frames++;
         if (lastFrameTime === 0) {
           lastFrameTime = now;
         }
         frameTimeDiff = now - lastFrameTime;
         lastFrameTime = now;
-        if (fpsCapLastFrameTime === 0) {
-          fpsCapLastFrameTime = now;
-        }
-        if (fpsCap > 0 && fps > fpsCap) {
-          logicFrames++;
-          if (now - fpsCapLastFrameTime >= fpsCapDurationTime) {
-            fpsCapLastFrameTime = now;
-            if (fps > 0) {
-              this.systems.forEach((system) => system.update(now));
-            }
-            logicFrames = 0;
-          }
-        } else {
-          if (fps > 0) {
-            this.systems.forEach((system) => system.update(now));
-          }
+        if (fps > 0) {
+          this.systems.forEach((system) => system.update(now));
         }
         if (lastFpsTime === 0) {
           lastFpsTime = now;
@@ -521,9 +528,28 @@
           this.callbackFnAfterSystemsUpdate();
         }
         this.frameNo = frames;
-        requestAnimationFrame(loop);
+        this._animationFrameId = requestAnimationFrame(loop);
       }, "loop");
-      requestAnimationFrame(loop);
+      this._animationFrameId = requestAnimationFrame(loop);
+    }
+    pause() {
+      this._paused = true;
+    }
+    resume() {
+      this._paused = false;
+    }
+    stop() {
+      if (this._animationFrameId) {
+        cancelAnimationFrame(this._animationFrameId);
+        this._animationFrameId = 0;
+      }
+    }
+    clear() {
+      this.stop();
+      this.entities.clear();
+      this.queries.clear();
+      this.systems.clear();
+      this.callbackFnAfterSystemsUpdate = void 0;
     }
   };
 })();
