@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-04-17
+
+### Changed
+- `.npmignore` expanded to exclude `.idea/`, `.vscode/`, `*.iml`, `src/example.ts`, `src/fixtures.ts`, and demo/example artifacts in `dist/`. Published tarball is now 12 files (was 25).
+
 ## [1.0.1] - 2026-04-17
 
 ### Fixed

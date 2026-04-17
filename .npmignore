@@ -7,9 +7,21 @@ eslint.config.mjs
 tsconfig.json
 vite.config.ts
 
-# Tests
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Tests & examples
 src/tests/
 src/demo/
+src/example.ts
+src/fixtures.ts
+dist/demo.html
+dist/demo.js
+dist/demo.js.map
+dist/example.html
+dist/example.js
 
 # CI & docs
 .github/
