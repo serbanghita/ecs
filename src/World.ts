@@ -3,7 +3,7 @@ import { Entity } from "./Entity.ts";
 import { System } from "./System.ts";
 import { Query, IQueryFilters } from "./Query.ts";
 import { Component } from "./Component.ts";
-import { ComponentRegistry } from "./ComponentRegistry.ts";
+import { ComponentRegistry, ComponentConstructor } from "./ComponentRegistry.ts";
 
 export type WorldStartOptions = {
   // Limit the FPS.
@@ -36,7 +36,7 @@ export class World {
   }
 
   // Shortcut to ComponentRegistry
-  public registerComponents(componentDeclarations: Array<new (properties: any) => Component<any>>) {
+  public registerComponents(componentDeclarations: ComponentConstructor[]) {
     this.declarations.components.registerComponents(componentDeclarations);
   }
 
@@ -102,7 +102,7 @@ export class World {
   }
 
   public getSystem(system: typeof System) {
-    const systemInstance = this.systems.get(System);
+    const systemInstance = this.systems.get(system);
 
     if (!systemInstance) {
       throw new Error(`There is no system instance with the id ${system.name}`);
@@ -198,16 +198,23 @@ export class World {
   }
 
   private startLoop() {
+    // Timestamp trackers use -1 as the "uninitialized" sentinel because 0 is a
+    // valid rAF timestamp.
     let frameTimeDiff = 0;
-    let lastFrameTime = 0;
+    let lastFrameTime = -1;
 
     let fps = 0;
     let frames = 0;
-    let lastFpsTime = 0;
+    let lastFpsTime = -1;
 
     const fpsCap = this.fpsCap;
     const fpsCapDurationTime = fpsCap > 0 ? 1000 / fpsCap : 0;
-    let fpsCapLastFrameTime = 0;
+    // Tolerance absorbs sub-millisecond rAF jitter (macOS Chrome often delivers
+    // timestamps slightly ahead of vsync). Without it, matched-refresh monitors
+    // lose ~3-10% of frames.
+    const FPS_CAP_TOLERANCE = 1;
+    let fpsCapAccumulator = 0;
+    let fpsCapLastFrameTime = -1;
 
     const loop = (now: DOMHighResTimeStamp) => {
       this.now = now;
@@ -215,46 +222,46 @@ export class World {
       if (this._paused) {
         // Keep the loop alive but skip everything; reset lastFrameTime
         // so the first frame after resume doesn't get a huge delta.
-        lastFrameTime = 0;
-        lastFpsTime = 0;
-        fpsCapLastFrameTime = 0;
+        lastFrameTime = -1;
+        lastFpsTime = -1;
+        fpsCapAccumulator = 0;
+        fpsCapLastFrameTime = -1;
         frames = 0;
         this._animationFrameId = requestAnimationFrame(loop);
         return;
       }
 
-      // FPS cap: skip this frame entirely if not enough time has passed.
-      // Advances by fixed intervals (not resetting to `now`) to prevent drift
-      // on high-refresh-rate monitors where rAF jitter can cause missed frames.
+      // FPS cap via time-accumulator: every rAF adds the real elapsed delta
+      // to an accumulator. A frame runs once the accumulator reaches one
+      // frame-time (minus a small tolerance for jitter); the frame-time is
+      // then subtracted. This naturally handles any refresh rate (60/120/144)
+      // and is resilient to rAF timestamps arriving slightly early or late.
       if (fpsCap > 0) {
-        if (fpsCapLastFrameTime === 0) {
-          fpsCapLastFrameTime = now;
-        } else if (now - fpsCapLastFrameTime < fpsCapDurationTime) {
+        if (fpsCapLastFrameTime !== -1) {
+          fpsCapAccumulator += now - fpsCapLastFrameTime;
+        }
+        fpsCapLastFrameTime = now;
+        if (fpsCapAccumulator < fpsCapDurationTime - FPS_CAP_TOLERANCE) {
           this._animationFrameId = requestAnimationFrame(loop);
           return;
         }
-        fpsCapLastFrameTime += fpsCapDurationTime;
-        // If we've fallen too far behind (e.g., tab was hidden), reset to now.
-        if (now - fpsCapLastFrameTime > fpsCapDurationTime) {
-          fpsCapLastFrameTime = now;
-        }
+        fpsCapAccumulator -= fpsCapDurationTime;
+        // If we've fallen way behind (e.g., tab was hidden), drop the debt.
+        if (fpsCapAccumulator > fpsCapDurationTime) fpsCapAccumulator = 0;
       }
 
       frames++;
+      this.frameNo++;
 
       // Frame duration (delta time since last logic frame).
-      if (lastFrameTime === 0) {
+      if (lastFrameTime === -1) {
         lastFrameTime = now;
       }
       frameTimeDiff = now - lastFrameTime;
       lastFrameTime = now;
 
-      if (fps > 0) {
-        this.systems.forEach((system) => system.update(now));
-      }
-
       // Fps counter (updates every second).
-      if (lastFpsTime === 0) {
+      if (lastFpsTime === -1) {
         lastFpsTime = now;
       }
       if (now - lastFpsTime >= 1000) {
@@ -263,15 +270,23 @@ export class World {
         lastFpsTime = now;
       }
 
-      // Public properties.
+      // Publish timing before systems run so update() sees this frame's values.
       this.fps = fps;
       this.frameDuration = frameTimeDiff;
+
+      this.systems.forEach((system, systemDeclaration) => {
+        if (system.isPaused || !system.preUpdate()) {
+          return;
+        }
+        system.update(now);
+        if (system.settings.ticksToRunBeforeExit > 0 && ++system.updatesRun >= system.settings.ticksToRunBeforeExit) {
+          this.systems.delete(systemDeclaration);
+        }
+      });
 
       if (this.callbackFnAfterSystemsUpdate) {
         this.callbackFnAfterSystemsUpdate();
       }
-
-      this.frameNo = frames;
 
       this._animationFrameId = requestAnimationFrame(loop);
     };

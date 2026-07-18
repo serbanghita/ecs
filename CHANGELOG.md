@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-18
+
+### Fixed
+- Game loop no longer skips all system updates during the first second after `start()`
+- `getSystem()` looked up the base `System` class instead of its argument and threw for every real lookup
+- `System.runEveryTicks()` is now honored by the loop; `preUpdate()` was never being called
+- `preUpdate()` returns whether the tick should run instead of overwriting the user-facing `isPaused` flag
+- Loop timestamp trackers use `-1` sentinels, so a frame at rAF timestamp `0` no longer collapses the next frame's delta to zero
+- `build:demo` was broken by default-imports of named exports
+- `tsconfig.json` no longer lists `dom` under `types` (it belongs in `lib` only), so `tsc --noEmit` runs clean
+
+### Changed
+- `Query.execute()` is O(1): returns the reactively-maintained entity set with no redundant first-run re-filter
+- `ticksToRunBeforeExit` values greater than 1 are implemented: the system deregisters after running N times
+- `world.fps` and `world.frameDuration` are published before systems update, so `update()` reads the current frame's delta
+- `world.frameNo` is a monotonically increasing frame counter (previously mirrored the FPS window counter and reset every second)
+- `Component.bitmask` is a `declare` field instead of an unsafe class/interface declaration merge
+- Constructor types no longer use `any`; `ComponentConstructor` is exported from `ComponentRegistry`
+- ESLint reports zero errors; unused-vars rule ignores `_`-prefixed identifiers
+- Refreshed transitive dev dependencies in the lockfile
+
+### Added
+- `System` test suite (100% coverage) pinning tick cadence and pause semantics
+- rAF-driven game-loop tests for `World`: first-frame updates, delta publishing, fpsCap, pause/resume, tick scheduling, `getSystem` (88 tests total)
+
 ## [1.0.2] - 2026-04-17
 
 ### Changed

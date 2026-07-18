@@ -415,7 +415,7 @@ describe("Query - empty filters", () => {
     const entity2 = world.createEntity("entity2");
     entity2.addComponent(Renderable);
 
-    const entity3 = world.createEntity("entity3");
+    world.createEntity("entity3");
     // No components
 
     const query = world.createQuery("emptyFilters", {});
@@ -435,7 +435,7 @@ describe("Query - empty filters", () => {
     const entity1 = world.createEntity("entity1");
     entity1.addComponent(Body, { width: 10, height: 20 });
 
-    const entity2 = world.createEntity("entity2");
+    world.createEntity("entity2");
 
     const query = world.createQuery("emptyArrays", { all: [], any: [], none: [] });
 
@@ -626,7 +626,7 @@ describe("Query - dynamic none filter (standalone)", () => {
 
     world.registerComponent(Keyboard);
 
-    const entity = world.createEntity("entity");
+    world.createEntity("entity");
 
     const query = world.createQuery("noneQuery", { none: [Keyboard] });
 
@@ -897,7 +897,7 @@ describe("Query - edge cases", () => {
     const entity1 = world.createEntity("entity1");
     entity1.addComponent(Body, { width: 10, height: 20 });
 
-    const entity2 = world.createEntity("entity2");
+    world.createEntity("entity2");
 
     // Logical impossibility: must have Body AND must not have Body
     const query = world.createQuery("conflicting", {
@@ -974,6 +974,43 @@ describe("Query - edge cases", () => {
     expect(query.execute().size).toBe(2);
   });
 
+  it("execute() returns the reactively-maintained set without re-filtering", () => {
+    const world = new World();
+
+    world.registerComponent(Body);
+
+    const entity1 = world.createEntity("entity1");
+    entity1.addComponent(Body, { width: 10, height: 20 });
+
+    const query = world.createQuery("reactive", { all: [Body] });
+
+    const firstResult = query.execute();
+    expect(firstResult.size).toBe(1);
+
+    // Churn: the same Map instance is kept in sync via notifications.
+    const entity2 = world.createEntity("entity2");
+    entity2.addComponent(Body, { width: 1, height: 2 });
+    entity1.removeComponent(Body);
+
+    expect(query.execute()).toBe(firstResult);
+    expect(query.execute().size).toBe(1);
+    expect(query.execute().has("entity2")).toBe(true);
+  });
+
+  it("an entity force-added via add() persists even if it does not match the filters", () => {
+    const world = new World();
+
+    world.registerComponent(Body);
+
+    const entity = world.createEntity("noBody");
+    const query = world.createQuery("bodies", { all: [Body] });
+
+    query.add(entity);
+
+    expect(query.execute().size).toBe(1);
+    expect(query.execute().has("noBody")).toBe(true);
+  });
+
   it("single component in 'all' vs 'any' behaves equivalently", () => {
     const world = new World();
 
@@ -986,7 +1023,7 @@ describe("Query - edge cases", () => {
     const entity2 = world.createEntity("entity2");
     entity2.addComponent(Renderable);
 
-    const entity3 = world.createEntity("entity3");
+    world.createEntity("entity3");
 
     const queryAll = world.createQuery("singleAll", { all: [Body] });
     const queryAny = world.createQuery("singleAny", { any: [Body] });

@@ -10,7 +10,7 @@ class CollisionSystem extends System {
     console.log(`Checking entity ${entity.id}`);
     return true;
   }
-  public update(now: number): void {
+  public update(): void {
     this.query.execute().forEach((entity) => {
       this.doSomeChecks(entity);
       return true;
@@ -69,7 +69,7 @@ entityA.addComponent(PositionOnScreen, { x: 5, y: 5 });
 /**
  * Create a dumb entity.
  */
-const entityC = world.createEntity("entityC");
+world.createEntity("entityC");
 
 const AllEntitiesWithPositionOnScreen = world.createQuery("give me all entities with a PositionOnScreen", { all: [PositionOnScreen] });
 world.createSystem(CollisionSystem, AllEntitiesWithPositionOnScreen, {});

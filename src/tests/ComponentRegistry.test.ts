@@ -1,6 +1,6 @@
 import { ComponentRegistry } from "../ComponentRegistry.ts";
 import { Body, Keyboard, PositionOnScreen } from "../fixtures.ts";
-import { afterAll, afterEach, describe } from "vitest";
+import { afterEach, describe } from "vitest";
 
 describe("ComponentRegistry", () => {
   afterEach(() => {
@@ -108,7 +108,7 @@ describe("ComponentRegistry", () => {
       reg.registerComponent(Body);
       reg.registerComponentGroup("group1", [Body]);
 
-      const a = reg.getComponentGroup("group1");
+      expect(reg.getComponentGroup("group1")).toBeDefined();
 
       expect(reg.getComponentGroupName(1n)).toBeUndefined();
       expect(reg.getComponentGroupName(2n)).toEqual("group1");

@@ -213,7 +213,6 @@
     all = 0n;
     any = 0n;
     none = 0n;
-    hasExecuted = false;
     dataSet = /* @__PURE__ */ new Map();
     checkIfComponentsAreRegistered() {
       [
@@ -251,13 +250,10 @@
       });
     }
     /**
-     * Set only the entities that correspond to the filters given.
+     * Returns the entities that correspond to the filters given.
+     * The set is maintained reactively via World notifications.
      */
     execute() {
-      if (!this.hasExecuted) {
-        this.dataSet = new Map([...this.dataSet].filter(([, entity]) => this.match(entity)));
-        this.hasExecuted = true;
-      }
       return this.dataSet;
     }
     match(entity) {
@@ -289,7 +285,7 @@
 
   // src/System.ts
   var System = class {
-    constructor(world, query, ...args) {
+    constructor(world, query, ..._args) {
       this.world = world;
       this.query = query;
       this.ticks = 0;
@@ -299,8 +295,9 @@
     }
     settings = { ticksToRunBeforeExit: -1, runEveryTicks: 0 };
     ticks = 0;
-    // If the update() logic should run or not.
-    // This is typically used along with settings.runEveryTicks.
+    // Number of times update() has actually run (drives settings.ticksToRunBeforeExit).
+    updatesRun = 0;
+    // User-facing pause flag; never mutated by the engine.
     isPaused = false;
     runEveryTicks(ticks) {
       this.settings.runEveryTicks = ticks;
@@ -309,19 +306,18 @@
       this.settings.ticksToRunBeforeExit = 1;
       return this;
     }
+    // Returns true if update() should run on this tick (settings.runEveryTicks cadence).
     preUpdate() {
       this.ticks++;
       if (this.settings.runEveryTicks > 0) {
         if (this.ticks < this.settings.runEveryTicks) {
-          this.isPaused = true;
-        } else {
-          this.ticks = 0;
-          this.isPaused = false;
+          return false;
         }
+        this.ticks = 0;
       }
+      return true;
     }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    update(now = 0) {
+    update(_now = 0) {
       throw new Error(`System update() must be implemented.`);
     }
   };
@@ -399,7 +395,7 @@
       return systemInstance;
     }
     getSystem(system) {
-      const systemInstance = this.systems.get(System);
+      const systemInstance = this.systems.get(system);
       if (!systemInstance) {
         throw new Error(`There is no system instance with the id ${system.name}`);
       }
@@ -476,45 +472,46 @@
     }
     startLoop() {
       let frameTimeDiff = 0;
-      let lastFrameTime = 0;
+      let lastFrameTime = -1;
       let fps = 0;
       let frames = 0;
-      let lastFpsTime = 0;
+      let lastFpsTime = -1;
       const fpsCap = this.fpsCap;
       const fpsCapDurationTime = fpsCap > 0 ? 1e3 / fpsCap : 0;
-      let fpsCapLastFrameTime = 0;
+      const FPS_CAP_TOLERANCE = 1;
+      let fpsCapAccumulator = 0;
+      let fpsCapLastFrameTime = -1;
       const loop = /* @__PURE__ */ __name((now) => {
         this.now = now;
         if (this._paused) {
-          lastFrameTime = 0;
-          lastFpsTime = 0;
-          fpsCapLastFrameTime = 0;
+          lastFrameTime = -1;
+          lastFpsTime = -1;
+          fpsCapAccumulator = 0;
+          fpsCapLastFrameTime = -1;
           frames = 0;
           this._animationFrameId = requestAnimationFrame(loop);
           return;
         }
         if (fpsCap > 0) {
-          if (fpsCapLastFrameTime === 0) {
-            fpsCapLastFrameTime = now;
-          } else if (now - fpsCapLastFrameTime < fpsCapDurationTime) {
+          if (fpsCapLastFrameTime !== -1) {
+            fpsCapAccumulator += now - fpsCapLastFrameTime;
+          }
+          fpsCapLastFrameTime = now;
+          if (fpsCapAccumulator < fpsCapDurationTime - FPS_CAP_TOLERANCE) {
             this._animationFrameId = requestAnimationFrame(loop);
             return;
           }
-          fpsCapLastFrameTime += fpsCapDurationTime;
-          if (now - fpsCapLastFrameTime > fpsCapDurationTime) {
-            fpsCapLastFrameTime = now;
-          }
+          fpsCapAccumulator -= fpsCapDurationTime;
+          if (fpsCapAccumulator > fpsCapDurationTime) fpsCapAccumulator = 0;
         }
         frames++;
-        if (lastFrameTime === 0) {
+        this.frameNo++;
+        if (lastFrameTime === -1) {
           lastFrameTime = now;
         }
         frameTimeDiff = now - lastFrameTime;
         lastFrameTime = now;
-        if (fps > 0) {
-          this.systems.forEach((system) => system.update(now));
-        }
-        if (lastFpsTime === 0) {
+        if (lastFpsTime === -1) {
           lastFpsTime = now;
         }
         if (now - lastFpsTime >= 1e3) {
@@ -524,10 +521,18 @@
         }
         this.fps = fps;
         this.frameDuration = frameTimeDiff;
+        this.systems.forEach((system, systemDeclaration) => {
+          if (system.isPaused || !system.preUpdate()) {
+            return;
+          }
+          system.update(now);
+          if (system.settings.ticksToRunBeforeExit > 0 && ++system.updatesRun >= system.settings.ticksToRunBeforeExit) {
+            this.systems.delete(systemDeclaration);
+          }
+        });
         if (this.callbackFnAfterSystemsUpdate) {
           this.callbackFnAfterSystemsUpdate();
         }
-        this.frameNo = frames;
         this._animationFrameId = requestAnimationFrame(loop);
       }, "loop");
       this._animationFrameId = requestAnimationFrame(loop);

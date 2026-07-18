@@ -104,45 +104,6 @@
     }
   };
 
-  // src/System.ts
-  var System = class {
-    constructor(world2, query, ...args) {
-      this.world = world2;
-      this.query = query;
-      this.ticks = 0;
-    }
-    static {
-      __name(this, "System");
-    }
-    settings = { ticksToRunBeforeExit: -1, runEveryTicks: 0 };
-    ticks = 0;
-    // If the update() logic should run or not.
-    // This is typically used along with settings.runEveryTicks.
-    isPaused = false;
-    runEveryTicks(ticks) {
-      this.settings.runEveryTicks = ticks;
-    }
-    runOnlyOnce() {
-      this.settings.ticksToRunBeforeExit = 1;
-      return this;
-    }
-    preUpdate() {
-      this.ticks++;
-      if (this.settings.runEveryTicks > 0) {
-        if (this.ticks < this.settings.runEveryTicks) {
-          this.isPaused = true;
-        } else {
-          this.ticks = 0;
-          this.isPaused = false;
-        }
-      }
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    update(now = 0) {
-      throw new Error(`System update() must be implemented.`);
-    }
-  };
-
   // src/Query.ts
   var Query = class {
     /**
@@ -165,7 +126,6 @@
     all = 0n;
     any = 0n;
     none = 0n;
-    hasExecuted = false;
     dataSet = /* @__PURE__ */ new Map();
     checkIfComponentsAreRegistered() {
       [
@@ -203,24 +163,21 @@
       });
     }
     /**
-     * Set only the entities that correspond to the filters given.
+     * Returns the entities that correspond to the filters given.
+     * The set is maintained reactively via World notifications.
      */
     execute() {
-      if (!this.hasExecuted) {
-        this.dataSet = new Map([...this.dataSet].filter(([id, entity]) => this.match(entity)));
-        this.hasExecuted = true;
-      }
       return this.dataSet;
     }
     match(entity) {
       if (this.none !== 0n && hasAnyOfBits(entity.componentsBitmask, this.none)) {
         return false;
       }
-      if (this.any !== 0n) {
-        return hasAnyOfBits(entity.componentsBitmask, this.any);
+      if (this.all !== 0n && !hasBit(entity.componentsBitmask, this.all)) {
+        return false;
       }
-      if (this.all !== 0n) {
-        return hasBit(entity.componentsBitmask, this.all);
+      if (this.any !== 0n && !hasAnyOfBits(entity.componentsBitmask, this.any)) {
+        return false;
       }
       return true;
     }
@@ -326,6 +283,8 @@
     fpsCapDuration = 0;
     callbackFnAfterSystemsUpdate = void 0;
     now = 0;
+    _animationFrameId = 0;
+    _paused = false;
     // Shortcut to ComponentRegistry
     registerComponent(componentDeclaration) {
       this.declarations.components.registerComponent(componentDeclaration);
@@ -379,7 +338,7 @@
       return systemInstance;
     }
     getSystem(system) {
-      const systemInstance = this.systems.get(System);
+      const systemInstance = this.systems.get(system);
       if (!systemInstance) {
         throw new Error(`There is no system instance with the id ${system.name}`);
       }
@@ -401,20 +360,26 @@
     /**
      * 1. Finds all Queries that have the Component in their filter.
      * 2. Add candidacy of the Entity to the list of Entities inside the Query.
+     * 3. Remove Entity from Queries that have the Component in their 'none' filter.
      *
      * @param entity
      * @param component
      */
     notifyQueriesOfEntityComponentAddition(entity, component) {
       this.queries.forEach((query) => {
-        if (hasBit(query.all, component.bitmask)) {
-          query.add(entity);
+        if (hasBit(query.none, component.bitmask)) {
+          query.remove(entity);
+          return;
+        }
+        if (hasBit(query.all, component.bitmask) || hasBit(query.any, component.bitmask)) {
+          query.candidate(entity);
         }
       });
     }
     /**
      * 1. Finds all Queries that have the Component in their filter.
      * 2. Remove the Entity from the list of Entities inside the Query.
+     * 3. Re-evaluate Entity candidacy for Queries that have the Component in their 'none' filter.
      *
      * @param entity
      * @param component
@@ -423,6 +388,15 @@
       this.queries.forEach((query) => {
         if (hasBit(query.all, component.bitmask)) {
           query.remove(entity);
+          return;
+        }
+        if (hasBit(query.any, component.bitmask)) {
+          query.remove(entity);
+          query.candidate(entity);
+          return;
+        }
+        if (hasBit(query.none, component.bitmask)) {
+          query.candidate(entity);
         }
       });
     }
@@ -441,40 +415,46 @@
     }
     startLoop() {
       let frameTimeDiff = 0;
-      let lastFrameTime = 0;
+      let lastFrameTime = -1;
       let fps = 0;
       let frames = 0;
-      let lastFpsTime = 0;
+      let lastFpsTime = -1;
       const fpsCap = this.fpsCap;
-      const fpsCapDurationTime = this.fpsCapDuration = 1e3 / fpsCap;
-      let fpsCapLastFrameTime = 0;
-      let logicFrames = 0;
+      const fpsCapDurationTime = fpsCap > 0 ? 1e3 / fpsCap : 0;
+      const FPS_CAP_TOLERANCE = 1;
+      let fpsCapAccumulator = 0;
+      let fpsCapLastFrameTime = -1;
       const loop = /* @__PURE__ */ __name((now) => {
         this.now = now;
+        if (this._paused) {
+          lastFrameTime = -1;
+          lastFpsTime = -1;
+          fpsCapAccumulator = 0;
+          fpsCapLastFrameTime = -1;
+          frames = 0;
+          this._animationFrameId = requestAnimationFrame(loop);
+          return;
+        }
+        if (fpsCap > 0) {
+          if (fpsCapLastFrameTime !== -1) {
+            fpsCapAccumulator += now - fpsCapLastFrameTime;
+          }
+          fpsCapLastFrameTime = now;
+          if (fpsCapAccumulator < fpsCapDurationTime - FPS_CAP_TOLERANCE) {
+            this._animationFrameId = requestAnimationFrame(loop);
+            return;
+          }
+          fpsCapAccumulator -= fpsCapDurationTime;
+          if (fpsCapAccumulator > fpsCapDurationTime) fpsCapAccumulator = 0;
+        }
         frames++;
-        if (lastFrameTime === 0) {
+        this.frameNo++;
+        if (lastFrameTime === -1) {
           lastFrameTime = now;
         }
         frameTimeDiff = now - lastFrameTime;
         lastFrameTime = now;
-        if (fpsCapLastFrameTime === 0) {
-          fpsCapLastFrameTime = now;
-        }
-        if (fpsCap > 0 && fps > fpsCap) {
-          logicFrames++;
-          if (now - fpsCapLastFrameTime >= fpsCapDurationTime) {
-            fpsCapLastFrameTime = now;
-            if (fps > 0) {
-              this.systems.forEach((system) => system.update(now));
-            }
-            logicFrames = 0;
-          }
-        } else {
-          if (fps > 0) {
-            this.systems.forEach((system) => system.update(now));
-          }
-        }
-        if (lastFpsTime === 0) {
+        if (lastFpsTime === -1) {
           lastFpsTime = now;
         }
         if (now - lastFpsTime >= 1e3) {
@@ -484,13 +464,40 @@
         }
         this.fps = fps;
         this.frameDuration = frameTimeDiff;
+        this.systems.forEach((system, systemDeclaration) => {
+          if (system.isPaused || !system.preUpdate()) {
+            return;
+          }
+          system.update(now);
+          if (system.settings.ticksToRunBeforeExit > 0 && ++system.updatesRun >= system.settings.ticksToRunBeforeExit) {
+            this.systems.delete(systemDeclaration);
+          }
+        });
         if (this.callbackFnAfterSystemsUpdate) {
           this.callbackFnAfterSystemsUpdate();
         }
-        this.frameNo = frames;
-        requestAnimationFrame(loop);
+        this._animationFrameId = requestAnimationFrame(loop);
       }, "loop");
-      requestAnimationFrame(loop);
+      this._animationFrameId = requestAnimationFrame(loop);
+    }
+    pause() {
+      this._paused = true;
+    }
+    resume() {
+      this._paused = false;
+    }
+    stop() {
+      if (this._animationFrameId) {
+        cancelAnimationFrame(this._animationFrameId);
+        this._animationFrameId = 0;
+      }
+    }
+    clear() {
+      this.stop();
+      this.entities.clear();
+      this.queries.clear();
+      this.systems.clear();
+      this.callbackFnAfterSystemsUpdate = void 0;
     }
   };
 
@@ -509,6 +516,45 @@
     // Use this when saving the state.
     serialize() {
       return this.properties;
+    }
+  };
+
+  // src/System.ts
+  var System = class {
+    constructor(world2, query, ..._args) {
+      this.world = world2;
+      this.query = query;
+      this.ticks = 0;
+    }
+    static {
+      __name(this, "System");
+    }
+    settings = { ticksToRunBeforeExit: -1, runEveryTicks: 0 };
+    ticks = 0;
+    // Number of times update() has actually run (drives settings.ticksToRunBeforeExit).
+    updatesRun = 0;
+    // User-facing pause flag; never mutated by the engine.
+    isPaused = false;
+    runEveryTicks(ticks) {
+      this.settings.runEveryTicks = ticks;
+    }
+    runOnlyOnce() {
+      this.settings.ticksToRunBeforeExit = 1;
+      return this;
+    }
+    // Returns true if update() should run on this tick (settings.runEveryTicks cadence).
+    preUpdate() {
+      this.ticks++;
+      if (this.settings.runEveryTicks > 0) {
+        if (this.ticks < this.settings.runEveryTicks) {
+          return false;
+        }
+        this.ticks = 0;
+      }
+      return true;
+    }
+    update(_now = 0) {
+      throw new Error(`System update() must be implemented.`);
     }
   };
 
@@ -578,10 +624,10 @@
   };
   var CANVAS_WIDTH = 800;
   var CANVAS_HEIGHT = 600;
-  var MAX_ENTITIES = 100;
+  var MAX_ENTITIES = 1e3;
   var SPAWN_RATE = 5;
   var MIN_LIFETIME = 3e3;
-  var MAX_LIFETIME = 8e3;
+  var MAX_LIFETIME = 8e4;
   var canvas = document.createElement("canvas");
   canvas.width = CANVAS_WIDTH;
   canvas.height = CANVAS_HEIGHT;
@@ -611,7 +657,7 @@
     static {
       __name(this, "MovementSystem");
     }
-    update(now) {
+    update() {
       this.query.execute().forEach((entity) => {
         if (!entity.hasComponent(Position) || !entity.hasComponent(Velocity)) return;
         const pos = entity.getComponent(Position);

@@ -1,8 +1,7 @@
-import World from "../World.ts";
-import Entity from "../Entity.ts";
-import Component from "../Component.ts";
-import ComponentRegistry from "../ComponentRegistry.ts";
-import System from "../System.ts";
+import { World } from "../World.ts";
+import { Component } from "../Component.ts";
+import { ComponentRegistry } from "../ComponentRegistry.ts";
+import { System } from "../System.ts";
 
 // ============================================================================
 // COMPONENTS
@@ -106,7 +105,7 @@ const world = new World();
 // ============================================================================
 
 class MovementSystem extends System {
-  public update(now: number): void {
+  public update(): void {
     this.query.execute().forEach((entity) => {
       if (!entity.hasComponent(Position) || !entity.hasComponent(Velocity)) return;
 

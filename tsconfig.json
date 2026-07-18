@@ -7,7 +7,7 @@
     "outDir": "./dist",
     "rewriteRelativeImportExtensions": true,
     "target": "es2022",
-    "types": ["vitest/globals", "node", "dom"]
+    "types": ["vitest/globals", "node"]
   },
   // These may be different for your repo:
   "include": ["./src"],

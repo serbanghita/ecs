@@ -13,15 +13,16 @@ export type SystemSettings = {
 export class System {
   public settings: SystemSettings = { ticksToRunBeforeExit: -1, runEveryTicks: 0 };
   public ticks: number = 0;
+  // Number of times update() has actually run (drives settings.ticksToRunBeforeExit).
+  public updatesRun: number = 0;
 
-  // If the update() logic should run or not.
-  // This is typically used along with settings.runEveryTicks.
+  // User-facing pause flag; never mutated by the engine.
   public isPaused: boolean = false;
 
   public constructor(
     public world: World,
     public query: Query,
-    ...args: unknown[]
+    ..._args: unknown[]
   ) {
     this.ticks = 0;
   }
@@ -35,21 +36,21 @@ export class System {
     return this;
   }
 
-  public preUpdate() {
+  // Returns true if update() should run on this tick (settings.runEveryTicks cadence).
+  public preUpdate(): boolean {
     this.ticks++;
 
     if (this.settings.runEveryTicks > 0) {
       if (this.ticks < this.settings.runEveryTicks) {
-        this.isPaused = true;
-      } else {
-        this.ticks = 0;
-        this.isPaused = false;
+        return false;
       }
+      this.ticks = 0;
     }
+
+    return true;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public update(now: number = 0): void {
+  public update(_now: number = 0): void {
     throw new Error(`System update() must be implemented.`);
   }
 }

@@ -3,8 +3,7 @@ import { Component } from "./Component.ts";
 import { World } from "./World.ts";
 import { addBit, hasAnyOfBits, hasBit } from "@serbanghita-gamedev/bitmask";
 
-//type ComponentInQuery = new <TProps extends Record<string, never>, TComp extends Component<TProps>>(properties: TProps) => TComp;
-export type ComponentInQuery = new (...args: any[]) => Component<any>;
+export type ComponentInQuery = new (...args: never[]) => Component<NonNullable<object>>;
 
 export interface IQueryFilters {
   all?: ComponentInQuery[];
@@ -22,7 +21,6 @@ export class Query {
   public all = 0n;
   public any = 0n;
   public none = 0n;
-  private hasExecuted = false;
   public dataSet: Map<string, Entity> = new Map();
 
   /**
@@ -83,14 +81,10 @@ export class Query {
   }
 
   /**
-   * Set only the entities that correspond to the filters given.
+   * Returns the entities that correspond to the filters given.
+   * The set is maintained reactively via World notifications.
    */
   public execute(): Map<string, Entity> {
-    if (!this.hasExecuted) {
-      this.dataSet = new Map([...this.dataSet].filter(([, entity]) => this.match(entity)));
-      this.hasExecuted = true;
-    }
-
     return this.dataSet;
   }
 
