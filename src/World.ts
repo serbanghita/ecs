@@ -42,9 +42,15 @@ export class World {
 
   public createQuery(id: string, filters: IQueryFilters): Query {
     const query = new Query(this, id, filters);
+    const existing = this.queries.get(id);
 
-    if (this.queries.has(query.id)) {
-      throw new Error(`A query with the id "${query.id}" already exists.`);
+    if (existing) {
+      // A query is defined by its bitmask signature, so re-creating it with
+      // identical filters is safe and returns the already-populated instance.
+      if (existing.all === query.all && existing.any === query.any && existing.none === query.none) {
+        return existing;
+      }
+      throw new Error(`A query with the id "${id}" already exists with different filters.`);
     }
 
     this.queries.set(query.id, query);

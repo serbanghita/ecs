@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "isolatedModules": true,
     "declaration": true,
     "declarationMap": true,
     "lib": ["es2023", "dom"],

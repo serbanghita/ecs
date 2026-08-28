@@ -42,6 +42,25 @@ describe("World", () => {
     expect(world.entities.size).toEqual(2);
   });
 
+  it("createQuery - same id and identical filters returns the existing query", () => {
+    const a = world.createEntity("a");
+    a.addComponent(Renderable);
+
+    const query = world.createQuery("renderables", { all: [Renderable] });
+    const again = world.createQuery("renderables", { all: [Renderable] });
+
+    expect(again).toBe(query);
+    expect(again.dataSet).toHaveLength(1);
+  });
+
+  it("createQuery - same id with different filters throws", () => {
+    world.createQuery("q", { all: [Renderable] });
+
+    expect(() => {
+      world.createQuery("q", { all: [PositionOnScreen] });
+    }).toThrowError('A query with the id "q" already exists with different filters.');
+  });
+
   it("createEntity - notifies queries", () => {
     world.createQuery("query1", { all: [Renderable] });
     world.createQuery("query2", { all: [PositionOnScreen] });

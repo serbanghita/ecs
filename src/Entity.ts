@@ -12,7 +12,14 @@ export class Entity {
     public id: string,
   ) {}
 
-  public addComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp, properties?: TProps) {
+  public addComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(
+    componentDeclaration: new (properties: TProps) => TComp,
+    // Props may be omitted only when the component's props type accepts an
+    // empty object (tag components, all-optional props). Components with
+    // required props must be given them at the call site.
+    ...args: Record<string, never> extends TProps ? [properties?: TProps] : [properties: TProps]
+  ) {
+    const properties = args[0] ?? ({} as TProps);
     let instance = this.components.get(componentDeclaration.name);
 
     if (instance) {
