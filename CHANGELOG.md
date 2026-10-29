@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-29
+
+### Changed
+- **Breaking:** component matching moved from BigInt bitmasks to `Uint32Array` bitsets (`@serbanghita-gamedev/bitmask` 2.x `bitset` namespace). There is no longer any practical limit on the number of registered components, and matching is 2-3x faster past 64 components (serbanghita/ecs#10). Migration:
+
+| 1.x | 2.0 |
+|-----|-----|
+| `Component.bitmask: bigint` | `Component.bitIndex: number` (0-based registration order) |
+| `Entity.componentsBitmask: bigint` | `Entity.componentsBitset: Uint32Array` |
+| `Query.all/any/none: bigint` | `Query.all/any/none: Uint32Array` |
+| `ComponentRegistry.getLastBitmask()` | `ComponentRegistry.getComponentCount()` / `getBitsetCapacity()` |
+| `ComponentRegistry.getComponentByBitmask(bigint)` | `ComponentRegistry.getComponentByBitIndex(number)` |
+| `ComponentRegistry.getComponentGroupName(bigint)` | `ComponentRegistry.getComponentGroupName(number)` |
+| `ComponentGroup.bitmask: bigint` | `ComponentGroup.bitset: Uint32Array` |
+
+- `ComponentRegistry.reset()` clears the singleton in place instead of replacing the instance, so previously obtained references remain valid
+- `World.createQuery` compares an existing query's filters with `Query.hasSameFilters()`
+- `ComponentRegistry.createBitset()` returns a bitset sized for every registered component; entities grow their bitset on demand when a component registered later is added
+
+### Added
+- `ComponentGroup` type export
+- Tests for registries with more than 32 and more than 64 components, bitset growth, and mutually exclusive groups across word boundaries
+
+### Fixed
+- `coverage/` and `scratch.ts` are excluded from the published npm package
+
 ## [1.1.0] - 2026-07-18
 
 ### Fixed

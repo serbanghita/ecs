@@ -1,7 +1,7 @@
 import { Entity } from "./Entity.ts";
 import { Component } from "./Component.ts";
 import { World } from "./World.ts";
-import { addBit, hasAnyOfBits, hasBit } from "@serbanghita-gamedev/bitmask";
+import { bitset } from "@serbanghita-gamedev/bitmask";
 
 export type ComponentInQuery = new (...args: never[]) => Component<NonNullable<object>>;
 
@@ -11,17 +11,15 @@ export interface IQueryFilters {
   none?: ComponentInQuery[];
 }
 
-export interface IQueryFiltersBitmask {
-  all: bigint;
-  any: bigint;
-  none: bigint;
-}
-
 export class Query {
-  public all = 0n;
-  public any = 0n;
-  public none = 0n;
+  public all: bitset.Bitset;
+  public any: bitset.Bitset;
+  public none: bitset.Bitset;
   public dataSet: Map<string, Entity> = new Map();
+
+  private hasAll = false;
+  private hasAny = false;
+  private hasNone = false;
 
   /**
    * Create a "query" of Entities that contain certain Components set.
@@ -35,8 +33,13 @@ export class Query {
     public id: string,
     public filters: IQueryFilters,
   ) {
+    const registry = world.declarations.components;
+    this.all = registry.createBitset();
+    this.any = registry.createBitset();
+    this.none = registry.createBitset();
+
     this.checkIfComponentsAreRegistered();
-    this.processFiltersAsBitMasks();
+    this.processFiltersAsBitsets();
   }
 
   private checkIfComponentsAreRegistered() {
@@ -48,29 +51,32 @@ export class Query {
         }, []),
       ),
     ].forEach((component) => {
-      if (typeof component.prototype.bitmask === "undefined") {
+      if (typeof component.prototype.bitIndex === "undefined") {
         throw new Error(`Please register the component ${component.name} in the ComponentRegistry.`);
       }
     });
   }
 
-  private processFiltersAsBitMasks(): void {
+  private processFiltersAsBitsets(): void {
     if (this.filters.all) {
       this.filters.all.forEach((component) => {
-        this.all = addBit(this.all, component.prototype.bitmask as bigint);
+        bitset.setBit(this.all, component.prototype.bitIndex);
       });
+      this.hasAll = !bitset.isEmpty(this.all);
     }
 
     if (this.filters.any) {
       this.filters.any.forEach((component) => {
-        this.any = addBit(this.any, component.prototype.bitmask as bigint);
+        bitset.setBit(this.any, component.prototype.bitIndex);
       });
+      this.hasAny = !bitset.isEmpty(this.any);
     }
 
     if (this.filters.none) {
       this.filters.none.forEach((component) => {
-        this.none = addBit(this.none, component.prototype.bitmask as bigint);
+        bitset.setBit(this.none, component.prototype.bitIndex);
       });
+      this.hasNone = !bitset.isEmpty(this.none);
     }
   }
 
@@ -88,19 +94,23 @@ export class Query {
     return this.dataSet;
   }
 
+  public hasSameFilters(other: Query): boolean {
+    return bitset.equals(this.all, other.all) && bitset.equals(this.any, other.any) && bitset.equals(this.none, other.none);
+  }
+
   private match(entity: Entity): boolean {
     // Reject if entity has ANY component in the "none" filter
-    if (this.none !== 0n && hasAnyOfBits(entity.componentsBitmask, this.none)) {
+    if (this.hasNone && bitset.hasAnyBits(entity.componentsBitset, this.none)) {
       return false;
     }
 
     // Reject if entity doesn't have ALL components in the "all" filter
-    if (this.all !== 0n && !hasBit(entity.componentsBitmask, this.all)) {
+    if (this.hasAll && !bitset.hasAllBits(entity.componentsBitset, this.all)) {
       return false;
     }
 
     // Reject if entity doesn't have ANY component in the "any" filter (when specified)
-    if (this.any !== 0n && !hasAnyOfBits(entity.componentsBitmask, this.any)) {
+    if (this.hasAny && !bitset.hasAnyBits(entity.componentsBitset, this.any)) {
       return false;
     }
 

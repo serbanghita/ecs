@@ -25,7 +25,7 @@ const reg = ComponentRegistry.getInstance();
 
 /**
  * You need to pre-register all Component's classes declarations in order
- * to allocate a unique bitmask to each of them.
+ * to allocate a unique bit index to each of them.
  * This will help later in the Queries.
  */
 reg.registerComponent(Body);

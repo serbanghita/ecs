@@ -1,6 +1,10 @@
 (() => {
   var __defProp = Object.defineProperty;
   var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
 
   // src/Component.ts
   var Component = class {
@@ -20,37 +24,139 @@
     }
   };
 
-  // node_modules/@serbanghita-gamedev/bitmask/src/bitmask.ts
-  function addBit(bitmasks, bit) {
-    bitmasks |= bit;
-    return bitmasks;
+  // node_modules/@serbanghita-gamedev/bitmask/src/bitset.ts
+  var bitset_exports = {};
+  __export(bitset_exports, {
+    capacity: () => capacity,
+    clear: () => clear,
+    clearBit: () => clearBit,
+    clone: () => clone,
+    create: () => create,
+    equals: () => equals,
+    flipBit: () => flipBit,
+    fromIndices: () => fromIndices,
+    hasAllBits: () => hasAllBits,
+    hasAnyBits: () => hasAnyBits,
+    isEmpty: () => isEmpty,
+    setBit: () => setBit,
+    testBit: () => testBit,
+    toBinaryString: () => toBinaryString
+  });
+  var WORD_BITS = 32;
+  function create(capacity2) {
+    if (!Number.isInteger(capacity2) || capacity2 <= 0) {
+      throw new RangeError(`Bitset capacity must be a positive integer, got ${capacity2}.`);
+    }
+    return new Uint32Array(Math.ceil(capacity2 / WORD_BITS));
   }
-  __name(addBit, "addBit");
-  function removeBit(bitmasks, bit) {
-    bitmasks &= ~bit;
-    return bitmasks;
+  __name(create, "create");
+  function fromIndices(indices, capacity2) {
+    const bitset = create(capacity2);
+    for (const index of indices) {
+      setBit(bitset, index);
+    }
+    return bitset;
   }
-  __name(removeBit, "removeBit");
-  function hasBit(bitmasks, bit) {
-    return (bitmasks & bit) === bit;
+  __name(fromIndices, "fromIndices");
+  function capacity(bitset) {
+    return bitset.length * WORD_BITS;
   }
-  __name(hasBit, "hasBit");
-  function hasAnyOfBits(bitmask, bits) {
-    return (bitmask & bits) !== 0n;
+  __name(capacity, "capacity");
+  function assertIndex(bitset, index) {
+    if (index < 0 || index >= bitset.length * WORD_BITS || !Number.isInteger(index)) {
+      throw new RangeError(`Bit index ${index} is out of range for a bitset of capacity ${bitset.length * WORD_BITS}.`);
+    }
   }
-  __name(hasAnyOfBits, "hasAnyOfBits");
+  __name(assertIndex, "assertIndex");
+  function setBit(bitset, index) {
+    assertIndex(bitset, index);
+    bitset[index >>> 5] |= 1 << (index & 31);
+  }
+  __name(setBit, "setBit");
+  function clearBit(bitset, index) {
+    assertIndex(bitset, index);
+    bitset[index >>> 5] &= ~(1 << (index & 31));
+  }
+  __name(clearBit, "clearBit");
+  function flipBit(bitset, index) {
+    assertIndex(bitset, index);
+    bitset[index >>> 5] ^= 1 << (index & 31);
+  }
+  __name(flipBit, "flipBit");
+  function testBit(bitset, index) {
+    if (index >>> 0 !== index) return false;
+    const word = bitset[index >>> 5];
+    return word !== void 0 && (word & 1 << (index & 31)) !== 0;
+  }
+  __name(testBit, "testBit");
+  function hasAllBits(bitset, bits) {
+    for (let i = 0; i < bits.length; i++) {
+      if ((bitset[i] & bits[i]) !== (bits[i] | 0)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  __name(hasAllBits, "hasAllBits");
+  function hasAnyBits(bitset, bits) {
+    for (let i = 0; i < bits.length; i++) {
+      if ((bitset[i] & bits[i]) !== 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+  __name(hasAnyBits, "hasAnyBits");
+  function isEmpty(bitset) {
+    for (let i = 0; i < bitset.length; i++) {
+      if (bitset[i] !== 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+  __name(isEmpty, "isEmpty");
+  function equals(a, b) {
+    if (a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+  __name(equals, "equals");
+  function clear(bitset) {
+    bitset.fill(0);
+  }
+  __name(clear, "clear");
+  function clone(bitset) {
+    return bitset.slice();
+  }
+  __name(clone, "clone");
+  function toBinaryString(bitset) {
+    let result = "";
+    for (let i = bitset.length - 1; i >= 0; i--) {
+      result += bitset[i].toString(2).padStart(WORD_BITS, "0");
+    }
+    return result;
+  }
+  __name(toBinaryString, "toBinaryString");
 
   // src/ComponentRegistry.ts
+  var WORD_BITS2 = 32;
   var ComponentRegistry = class _ComponentRegistry {
     static {
       __name(this, "ComponentRegistry");
     }
     static instance;
-    bitmask = 1n;
+    nextBitIndex = 0;
     components = /* @__PURE__ */ new Map();
     componentGroups = /* @__PURE__ */ new Map();
     componentToGroupMap = /* @__PURE__ */ new Map();
-    bitmaskToComponentMap = /* @__PURE__ */ new Map();
+    bitIndexToComponentMap = /* @__PURE__ */ new Map();
     constructor() {
     }
     static getInstance() {
@@ -61,13 +167,13 @@
     }
     registerComponent(componentDeclaration) {
       if (componentDeclaration.prototype && typeof componentDeclaration.prototype === "object") {
-        const newBitmask = this.bitmask <<= 1n;
-        Object.defineProperty(componentDeclaration.prototype, "bitmask", {
-          value: newBitmask,
+        const bitIndex = this.nextBitIndex++;
+        Object.defineProperty(componentDeclaration.prototype, "bitIndex", {
+          value: bitIndex,
           writable: true,
           configurable: true
         });
-        this.bitmaskToComponentMap.set(newBitmask, componentDeclaration);
+        this.bitIndexToComponentMap.set(bitIndex, componentDeclaration);
       }
       this.components.set(componentDeclaration.prototype.constructor.name, componentDeclaration);
       return componentDeclaration;
@@ -84,28 +190,42 @@
       }
       return component;
     }
-    getComponentByBitmask(bitmask) {
-      return this.bitmaskToComponentMap.get(bitmask);
+    getComponentByBitIndex(bitIndex) {
+      return this.bitIndexToComponentMap.get(bitIndex);
     }
     registerComponentGroup(groupName, components, options = {}) {
-      let groupBitmask = 0n;
+      const groupBitset = this.createBitset();
       for (const component of components) {
-        groupBitmask = addBit(groupBitmask, component.prototype.bitmask);
-        this.componentToGroupMap.set(component.prototype.bitmask, groupName);
+        bitset_exports.setBit(groupBitset, component.prototype.bitIndex);
+        this.componentToGroupMap.set(component.prototype.bitIndex, groupName);
       }
-      this.componentGroups.set(groupName, { components, bitmask: groupBitmask, options });
+      this.componentGroups.set(groupName, { components, bitset: groupBitset, options });
     }
     getComponentGroup(groupName) {
       return this.componentGroups.get(groupName);
     }
-    getComponentGroupName(componentBitmask) {
-      return this.componentToGroupMap.get(componentBitmask);
+    getComponentGroupName(bitIndex) {
+      return this.componentToGroupMap.get(bitIndex);
     }
-    getLastBitmask() {
-      return this.bitmask;
+    getComponentCount() {
+      return this.nextBitIndex;
+    }
+    /**
+     * Number of bits a freshly created bitset holds: enough for every registered
+     * component, rounded up to a whole 32-bit word, never less than one word.
+     */
+    getBitsetCapacity() {
+      return Math.max(WORD_BITS2, Math.ceil(this.nextBitIndex / WORD_BITS2) * WORD_BITS2);
+    }
+    createBitset() {
+      return bitset_exports.create(this.getBitsetCapacity());
     }
     reset() {
-      _ComponentRegistry.instance = new _ComponentRegistry();
+      this.nextBitIndex = 0;
+      this.components.clear();
+      this.componentGroups.clear();
+      this.componentToGroupMap.clear();
+      this.bitIndexToComponentMap.clear();
     }
   };
 
@@ -114,38 +234,39 @@
     constructor(world, id) {
       this.world = world;
       this.id = id;
+      this.componentsBitset = world.declarations.components.createBitset();
     }
     static {
       __name(this, "Entity");
     }
-    componentsBitmask = 0n;
+    componentsBitset;
     components = /* @__PURE__ */ new Map();
-    addComponent(componentDeclaration, properties) {
+    addComponent(componentDeclaration, ...args) {
+      const properties = args[0] ?? {};
       let instance = this.components.get(componentDeclaration.name);
       if (instance) {
         instance.init(properties);
       } else {
         instance = new componentDeclaration(properties);
       }
-      if (typeof instance.bitmask === "undefined") {
+      if (typeof instance.bitIndex === "undefined") {
         throw new Error(`Please register the component ${instance.constructor.name} in the ComponentRegistry.`);
       }
       const componentRegistry = this.world.declarations.components;
-      const groupName = componentRegistry.getComponentGroupName(instance.bitmask);
+      const groupName = componentRegistry.getComponentGroupName(instance.bitIndex);
       if (groupName) {
         const group = componentRegistry.getComponentGroup(groupName);
-        if (group && group.options.mutuallyExclusive) {
-          const conflictingBitmask = this.componentsBitmask & group.bitmask;
-          if (conflictingBitmask !== 0n) {
-            const conflictingComponent = componentRegistry.getComponentByBitmask(conflictingBitmask);
-            if (conflictingComponent) {
-              this.removeComponent(conflictingComponent);
+        if (group && group.options.mutuallyExclusive && bitset_exports.hasAnyBits(this.componentsBitset, group.bitset)) {
+          for (const groupComponent of group.components) {
+            if (groupComponent !== componentDeclaration && bitset_exports.testBit(this.componentsBitset, groupComponent.prototype.bitIndex)) {
+              this.removeComponent(groupComponent);
             }
           }
         }
       }
       this.components.set(componentDeclaration.name, instance);
-      this.componentsBitmask = addBit(this.componentsBitmask, instance.bitmask);
+      this.ensureBitsetCapacity(instance.bitIndex);
+      bitset_exports.setBit(this.componentsBitset, instance.bitIndex);
       this.onAddComponent(instance);
       return this;
     }
@@ -168,19 +289,32 @@
         return this;
       }
       const component = this.getComponent(componentDeclaration);
-      if (typeof component.bitmask === "undefined") {
-        throw new Error(`Component ${componentDeclaration.name} has no bitmask.`);
+      if (typeof component.bitIndex === "undefined") {
+        throw new Error(`Component ${componentDeclaration.name} has no bit index.`);
       }
-      this.componentsBitmask = removeBit(this.componentsBitmask, component.bitmask);
+      bitset_exports.clearBit(this.componentsBitset, component.bitIndex);
       this.components.delete(componentDeclaration.name);
       this.onRemoveComponent(component);
       return this;
     }
     hasComponent(componentDeclaration) {
-      if (typeof componentDeclaration.prototype.bitmask === "undefined") {
+      if (typeof componentDeclaration.prototype.bitIndex === "undefined") {
         throw new Error(`Please register the component ${componentDeclaration.name} in the ComponentRegistry.`);
       }
-      return hasBit(this.componentsBitmask, componentDeclaration.prototype.bitmask);
+      return bitset_exports.testBit(this.componentsBitset, componentDeclaration.prototype.bitIndex);
+    }
+    /**
+     * Components registered after this entity was created may not fit in its
+     * bitset. Grow it to the registry's current capacity when that happens.
+     */
+    ensureBitsetCapacity(bitIndex) {
+      if (bitIndex < bitset_exports.capacity(this.componentsBitset)) {
+        return;
+      }
+      const required = ((bitIndex >>> 5) + 1) * 32;
+      const grown = bitset_exports.create(Math.max(required, this.world.declarations.components.getBitsetCapacity()));
+      grown.set(this.componentsBitset);
+      this.componentsBitset = grown;
     }
     onAddComponent(newComponent) {
       this.world.notifyQueriesOfEntityComponentAddition(this, newComponent);
@@ -204,16 +338,23 @@
       this.world = world;
       this.id = id;
       this.filters = filters;
+      const registry = world.declarations.components;
+      this.all = registry.createBitset();
+      this.any = registry.createBitset();
+      this.none = registry.createBitset();
       this.checkIfComponentsAreRegistered();
-      this.processFiltersAsBitMasks();
+      this.processFiltersAsBitsets();
     }
     static {
       __name(this, "Query");
     }
-    all = 0n;
-    any = 0n;
-    none = 0n;
+    all;
+    any;
+    none;
     dataSet = /* @__PURE__ */ new Map();
+    hasAll = false;
+    hasAny = false;
+    hasNone = false;
     checkIfComponentsAreRegistered() {
       [
         ...new Set(
@@ -222,26 +363,29 @@
           }, [])
         )
       ].forEach((component) => {
-        if (typeof component.prototype.bitmask === "undefined") {
+        if (typeof component.prototype.bitIndex === "undefined") {
           throw new Error(`Please register the component ${component.name} in the ComponentRegistry.`);
         }
       });
     }
-    processFiltersAsBitMasks() {
+    processFiltersAsBitsets() {
       if (this.filters.all) {
         this.filters.all.forEach((component) => {
-          this.all = addBit(this.all, component.prototype.bitmask);
+          bitset_exports.setBit(this.all, component.prototype.bitIndex);
         });
+        this.hasAll = !bitset_exports.isEmpty(this.all);
       }
       if (this.filters.any) {
         this.filters.any.forEach((component) => {
-          this.any = addBit(this.any, component.prototype.bitmask);
+          bitset_exports.setBit(this.any, component.prototype.bitIndex);
         });
+        this.hasAny = !bitset_exports.isEmpty(this.any);
       }
       if (this.filters.none) {
         this.filters.none.forEach((component) => {
-          this.none = addBit(this.none, component.prototype.bitmask);
+          bitset_exports.setBit(this.none, component.prototype.bitIndex);
         });
+        this.hasNone = !bitset_exports.isEmpty(this.none);
       }
     }
     init() {
@@ -256,14 +400,17 @@
     execute() {
       return this.dataSet;
     }
+    hasSameFilters(other) {
+      return bitset_exports.equals(this.all, other.all) && bitset_exports.equals(this.any, other.any) && bitset_exports.equals(this.none, other.none);
+    }
     match(entity) {
-      if (this.none !== 0n && hasAnyOfBits(entity.componentsBitmask, this.none)) {
+      if (this.hasNone && bitset_exports.hasAnyBits(entity.componentsBitset, this.none)) {
         return false;
       }
-      if (this.all !== 0n && !hasBit(entity.componentsBitmask, this.all)) {
+      if (this.hasAll && !bitset_exports.hasAllBits(entity.componentsBitset, this.all)) {
         return false;
       }
-      if (this.any !== 0n && !hasAnyOfBits(entity.componentsBitmask, this.any)) {
+      if (this.hasAny && !bitset_exports.hasAnyBits(entity.componentsBitset, this.any)) {
         return false;
       }
       return true;
@@ -352,8 +499,12 @@
     }
     createQuery(id, filters) {
       const query = new Query(this, id, filters);
-      if (this.queries.has(query.id)) {
-        throw new Error(`A query with the id "${query.id}" already exists.`);
+      const existing = this.queries.get(id);
+      if (existing) {
+        if (existing.hasSameFilters(query)) {
+          return existing;
+        }
+        throw new Error(`A query with the id "${id}" already exists with different filters.`);
       }
       this.queries.set(query.id, query);
       query.init();
@@ -424,11 +575,11 @@
      */
     notifyQueriesOfEntityComponentAddition(entity, component) {
       this.queries.forEach((query) => {
-        if (hasBit(query.none, component.bitmask)) {
+        if (bitset_exports.testBit(query.none, component.bitIndex)) {
           query.remove(entity);
           return;
         }
-        if (hasBit(query.all, component.bitmask) || hasBit(query.any, component.bitmask)) {
+        if (bitset_exports.testBit(query.all, component.bitIndex) || bitset_exports.testBit(query.any, component.bitIndex)) {
           query.candidate(entity);
         }
       });
@@ -443,16 +594,16 @@
      */
     notifyQueriesOfEntityComponentRemoval(entity, component) {
       this.queries.forEach((query) => {
-        if (hasBit(query.all, component.bitmask)) {
+        if (bitset_exports.testBit(query.all, component.bitIndex)) {
           query.remove(entity);
           return;
         }
-        if (hasBit(query.any, component.bitmask)) {
+        if (bitset_exports.testBit(query.any, component.bitIndex)) {
           query.remove(entity);
           query.candidate(entity);
           return;
         }
-        if (hasBit(query.none, component.bitmask)) {
+        if (bitset_exports.testBit(query.none, component.bitIndex)) {
           query.candidate(entity);
         }
       });

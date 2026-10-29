@@ -1,16 +1,17 @@
-// src/Entity.ts
-import { addBit, hasBit, removeBit } from "@serbanghita-gamedev/bitmask";
+import { bitset } from "@serbanghita-gamedev/bitmask";
 import { Component } from "./Component.ts";
 import { World } from "./World.ts";
 
 export class Entity {
-  public componentsBitmask = 0n;
+  public componentsBitset: bitset.Bitset;
   public components: Map<string, Component<NonNullable<object>>> = new Map();
 
   constructor(
     public world: World,
     public id: string,
-  ) {}
+  ) {
+    this.componentsBitset = world.declarations.components.createBitset();
+  }
 
   public addComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(
     componentDeclaration: new (properties: TProps) => TComp,
@@ -28,28 +29,27 @@ export class Entity {
       instance = new componentDeclaration(properties);
     }
 
-    if (typeof instance.bitmask === "undefined") {
+    if (typeof instance.bitIndex === "undefined") {
       throw new Error(`Please register the component ${instance.constructor.name} in the ComponentRegistry.`);
     }
 
     const componentRegistry = this.world.declarations.components;
-    const groupName = componentRegistry.getComponentGroupName(instance.bitmask);
+    const groupName = componentRegistry.getComponentGroupName(instance.bitIndex);
 
     if (groupName) {
       const group = componentRegistry.getComponentGroup(groupName);
-      if (group && group.options.mutuallyExclusive) {
-        const conflictingBitmask = this.componentsBitmask & group.bitmask;
-        if (conflictingBitmask !== 0n) {
-          const conflictingComponent = componentRegistry.getComponentByBitmask(conflictingBitmask);
-          if (conflictingComponent) {
-            this.removeComponent(conflictingComponent as new (properties: TProps) => TComp);
+      if (group && group.options.mutuallyExclusive && bitset.hasAnyBits(this.componentsBitset, group.bitset)) {
+        for (const groupComponent of group.components) {
+          if (groupComponent !== componentDeclaration && bitset.testBit(this.componentsBitset, groupComponent.prototype.bitIndex)) {
+            this.removeComponent(groupComponent as new (properties: TProps) => TComp);
           }
         }
       }
     }
 
     this.components.set(componentDeclaration.name, instance);
-    this.componentsBitmask = addBit(this.componentsBitmask, instance.bitmask);
+    this.ensureBitsetCapacity(instance.bitIndex);
+    bitset.setBit(this.componentsBitset, instance.bitIndex);
     this.onAddComponent(instance);
 
     return this;
@@ -77,11 +77,11 @@ export class Entity {
     }
     const component = this.getComponent(componentDeclaration);
 
-    if (typeof component.bitmask === "undefined") {
-      throw new Error(`Component ${componentDeclaration.name} has no bitmask.`);
+    if (typeof component.bitIndex === "undefined") {
+      throw new Error(`Component ${componentDeclaration.name} has no bit index.`);
     }
 
-    this.componentsBitmask = removeBit(this.componentsBitmask, component.bitmask);
+    bitset.clearBit(this.componentsBitset, component.bitIndex);
     this.components.delete(componentDeclaration.name);
     this.onRemoveComponent(component);
 
@@ -89,10 +89,24 @@ export class Entity {
   }
 
   public hasComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp): boolean {
-    if (typeof componentDeclaration.prototype.bitmask === "undefined") {
+    if (typeof componentDeclaration.prototype.bitIndex === "undefined") {
       throw new Error(`Please register the component ${componentDeclaration.name} in the ComponentRegistry.`);
     }
-    return hasBit(this.componentsBitmask, componentDeclaration.prototype.bitmask);
+    return bitset.testBit(this.componentsBitset, componentDeclaration.prototype.bitIndex);
+  }
+
+  /**
+   * Components registered after this entity was created may not fit in its
+   * bitset. Grow it to the registry's current capacity when that happens.
+   */
+  private ensureBitsetCapacity(bitIndex: number) {
+    if (bitIndex < bitset.capacity(this.componentsBitset)) {
+      return;
+    }
+    const required = ((bitIndex >>> 5) + 1) * 32;
+    const grown = bitset.create(Math.max(required, this.world.declarations.components.getBitsetCapacity()));
+    grown.set(this.componentsBitset);
+    this.componentsBitset = grown;
   }
 
   private onAddComponent<T extends NonNullable<object>>(newComponent: Component<T>) {

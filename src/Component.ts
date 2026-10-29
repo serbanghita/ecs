@@ -1,7 +1,7 @@
 export class Component<T extends NonNullable<object>> {
   // Assigned on the prototype by ComponentRegistry.registerComponent().
   // `declare` keeps the field type-only so no instance field shadows the prototype value.
-  declare readonly bitmask: bigint;
+  declare readonly bitIndex: number;
 
   constructor(public properties: T) {}
 

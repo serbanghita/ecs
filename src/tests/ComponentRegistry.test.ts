@@ -1,6 +1,7 @@
 import { ComponentRegistry } from "../ComponentRegistry.ts";
 import { Body, Keyboard, PositionOnScreen } from "../fixtures.ts";
 import { afterEach, describe } from "vitest";
+import { bitset } from "@serbanghita-gamedev/bitmask";
 
 describe("ComponentRegistry", () => {
   afterEach(() => {
@@ -20,7 +21,8 @@ describe("ComponentRegistry", () => {
       reg.registerComponent(Body);
       reg.registerComponent(PositionOnScreen);
 
-      expect(reg.getLastBitmask()).toBe(4n);
+      expect(reg.getComponentCount()).toBe(2);
+      expect(reg.getBitsetCapacity()).toBe(32);
 
       const body1 = new Body({ width: 10, height: 20 });
       const body2 = new Body({ width: 30, height: 40 });
@@ -30,13 +32,13 @@ describe("ComponentRegistry", () => {
       const position2 = new PositionOnScreen({ x: 3, y: 4 });
       const position3 = new PositionOnScreen({ x: 5, y: 6 });
 
-      expect(body1.bitmask).toBe(2n);
-      expect(body2.bitmask).toBe(2n);
-      expect(body3.bitmask).toBe(2n);
+      expect(body1.bitIndex).toBe(0);
+      expect(body2.bitIndex).toBe(0);
+      expect(body3.bitIndex).toBe(0);
 
-      expect(position1.bitmask).toBe(4n);
-      expect(position2.bitmask).toBe(4n);
-      expect(position3.bitmask).toBe(4n);
+      expect(position1.bitIndex).toBe(1);
+      expect(position2.bitIndex).toBe(1);
+      expect(position3.bitIndex).toBe(1);
 
       // Extra safety check that the properties of the class were successfully set.
       expect(body1.properties.width).toBe(10);
@@ -90,13 +92,13 @@ describe("ComponentRegistry", () => {
       expect(reg.getComponentGroup("group0")).toBeUndefined();
       expect(reg.getComponentGroup("group1")).toEqual(
         expect.objectContaining({
-          bitmask: 6n,
+          bitset: bitset.fromIndices([0, 1], 32),
           components: [Body, PositionOnScreen],
         }),
       );
       expect(reg.getComponentGroup("group2")).toEqual(
         expect.objectContaining({
-          bitmask: 8n,
+          bitset: bitset.fromIndices([2], 32),
           components: [Keyboard],
         }),
       );
@@ -110,8 +112,8 @@ describe("ComponentRegistry", () => {
 
       expect(reg.getComponentGroup("group1")).toBeDefined();
 
-      expect(reg.getComponentGroupName(1n)).toBeUndefined();
-      expect(reg.getComponentGroupName(2n)).toEqual("group1");
+      expect(reg.getComponentGroupName(1)).toBeUndefined();
+      expect(reg.getComponentGroupName(0)).toEqual("group1");
     });
   });
 });

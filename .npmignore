@@ -26,3 +26,8 @@ dist/example.js
 # CI & docs
 .github/
 CLAUDE.md
+
+# Coverage & scratch
+coverage/
+.coverage/
+scratch.ts

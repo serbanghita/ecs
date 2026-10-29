@@ -3,6 +3,7 @@ import { ComponentRegistry } from "../ComponentRegistry.ts";
 import { World } from "../World.ts";
 import { Body, PositionOnScreen } from "../fixtures.ts";
 import { afterEach } from "vitest";
+import { bitset } from "@serbanghita-gamedev/bitmask";
 
 describe("Entity", () => {
   let world: World;
@@ -21,12 +22,14 @@ describe("Entity", () => {
 
     const entity = new Entity(world, "test");
     const spy = vi.spyOn(world, "notifyQueriesOfEntityComponentAddition");
-    entity.addComponent(Body, { width: 10, height: 20 }); // 1n
+    entity.addComponent(Body, { width: 10, height: 20 }); // bit 0
     expect(spy).toHaveBeenCalledWith(entity, entity.getComponent(Body));
-    entity.addComponent(PositionOnScreen, { x: 1, y: 2 }); // 2n
+    entity.addComponent(PositionOnScreen, { x: 1, y: 2 }); // bit 1
     expect(spy).toHaveBeenCalledWith(entity, entity.getComponent(PositionOnScreen));
 
-    expect(entity.componentsBitmask).toBe(6n);
+    expect(bitset.testBit(entity.componentsBitset, Body.prototype.bitIndex)).toBe(true);
+    expect(bitset.testBit(entity.componentsBitset, PositionOnScreen.prototype.bitIndex)).toBe(true);
+    expect(entity.componentsBitset[0]).toBe(0b11);
     expect(entity.getComponent(Body)).toBeInstanceOf(Body);
     expect(entity.getComponent(PositionOnScreen)).toBeInstanceOf(PositionOnScreen);
   });
@@ -35,7 +38,7 @@ describe("Entity", () => {
     registry.registerComponent(Body);
 
     const entity = new Entity(world, "test");
-    entity.addComponent(Body, { width: 10, height: 20 }); // 1n
+    entity.addComponent(Body, { width: 10, height: 20 }); // bit 0
 
     expect(entity.getComponent(Body)).toBeInstanceOf(Body);
     expect(entity.getComponent(Body)).toEqual({
@@ -69,7 +72,7 @@ describe("Entity", () => {
     registry.registerComponent(Body);
 
     const entity = new Entity(world, "test");
-    entity.addComponent(Body, { width: 10, height: 20 }); // 1n
+    entity.addComponent(Body, { width: 10, height: 20 }); // bit 0
 
     expect(() => entity.getComponent(PositionOnScreen)).toThrow("Component requested PositionOnScreen is non-existent.");
   });
@@ -79,8 +82,8 @@ describe("Entity", () => {
     registry.registerComponent(PositionOnScreen);
 
     const entity = new Entity(world, "test");
-    entity.addComponent(Body, { width: 10, height: 20 }); // 1n
-    entity.addComponent(PositionOnScreen, { x: 1, y: 2 }); // 2n
+    entity.addComponent(Body, { width: 10, height: 20 }); // bit 0
+    entity.addComponent(PositionOnScreen, { x: 1, y: 2 }); // bit 1
 
     expect(entity.hasComponent(Body)).toBe(true);
     expect(entity.hasComponent(PositionOnScreen)).toBe(true);

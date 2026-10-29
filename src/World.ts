@@ -1,4 +1,4 @@
-import { hasBit } from "@serbanghita-gamedev/bitmask";
+import { bitset } from "@serbanghita-gamedev/bitmask";
 import { Entity } from "./Entity.ts";
 import { System } from "./System.ts";
 import { Query, IQueryFilters } from "./Query.ts";
@@ -45,9 +45,9 @@ export class World {
     const existing = this.queries.get(id);
 
     if (existing) {
-      // A query is defined by its bitmask signature, so re-creating it with
+      // A query is defined by its bitset signature, so re-creating it with
       // identical filters is safe and returns the already-populated instance.
-      if (existing.all === query.all && existing.any === query.any && existing.none === query.none) {
+      if (existing.hasSameFilters(query)) {
         return existing;
       }
       throw new Error(`A query with the id "${id}" already exists with different filters.`);
@@ -144,12 +144,12 @@ export class World {
   public notifyQueriesOfEntityComponentAddition<T extends NonNullable<object>>(entity: Entity, component: Component<T>) {
     this.queries.forEach((query) => {
       // If component is in 'none', remove entity from query
-      if (hasBit(query.none, component.bitmask as bigint)) {
+      if (bitset.testBit(query.none, component.bitIndex)) {
         query.remove(entity);
         return;
       }
       // If component is in 'all' or 'any', re-evaluate entity candidacy
-      if (hasBit(query.all, component.bitmask as bigint) || hasBit(query.any, component.bitmask as bigint)) {
+      if (bitset.testBit(query.all, component.bitIndex) || bitset.testBit(query.any, component.bitIndex)) {
         query.candidate(entity);
       }
     });
@@ -166,19 +166,19 @@ export class World {
   public notifyQueriesOfEntityComponentRemoval<T extends NonNullable<object>>(entity: Entity, component: Component<T>) {
     this.queries.forEach((query) => {
       // If component is in 'all', remove entity from query
-      if (hasBit(query.all, component.bitmask as bigint)) {
+      if (bitset.testBit(query.all, component.bitIndex)) {
         query.remove(entity);
         return;
       }
       // If component is in 'any', re-evaluate (entity may no longer have any of the required components)
-      if (hasBit(query.any, component.bitmask as bigint)) {
+      if (bitset.testBit(query.any, component.bitIndex)) {
         // Remove and re-candidate to properly check if entity still matches
         query.remove(entity);
         query.candidate(entity);
         return;
       }
       // If component is in 'none', re-evaluate entity candidacy
-      if (hasBit(query.none, component.bitmask as bigint)) {
+      if (bitset.testBit(query.none, component.bitIndex)) {
         query.candidate(entity);
       }
     });

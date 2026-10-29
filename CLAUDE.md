@@ -2,16 +2,16 @@
 
 ## Overview
 
-A TypeScript ECS library using bitmask-based component matching for fast entity filtering. Provides reactive queries that automatically update when entities gain or lose components.
+A TypeScript ECS library using Uint32Array bitsets for component matching and fast entity filtering. Each registered component gets a bit index; entities and queries hold fixed-width bitsets that grow by 32-bit words as components are registered. Provides reactive queries that automatically update when entities gain or lose components.
 
 ## Source Structure
 
 | File | Description |
 |------|-------------|
 | `src/Component.ts` | Base class for components with `properties` field and optional `init()` for reuse |
-| `src/ComponentRegistry.ts` | Singleton assigning unique bigint bitmasks to component classes |
-| `src/Entity.ts` | Container holding components and a bitmask signature; notifies queries on changes |
-| `src/Query.ts` | Filters entities using `all`/`any`/`none` bitmask filters; reactive updates |
+| `src/ComponentRegistry.ts` | Singleton assigning a unique `bitIndex` to each component class; owns the bitset capacity |
+| `src/Entity.ts` | Container holding components and a `componentsBitset` signature; notifies queries on changes |
+| `src/Query.ts` | Filters entities using `all`/`any`/`none` bitset filters; reactive updates |
 | `src/System.ts` | Abstract base class with `update(now)`, tick scheduling, pause support |
 | `src/World.ts` | Main orchestration: game loop via rAF, entity/query/system management, FPS |
 | `src/fixtures.ts` | Test fixture components (Idle, Walking, Attacking, Renderable, etc.) |
@@ -31,12 +31,13 @@ A TypeScript ECS library using bitmask-based component matching for fast entity 
 | `SystemSettings` | Type | `{ ticksToRunBeforeExit, runEveryTicks }` |
 | `WorldStartOptions` | Type | `{ fpsCap?, callbackFnAfterSystemsUpdate? }` |
 | `ComponentGroupOptions` | Type | `{ mutuallyExclusive? }` |
+| `ComponentGroup` | Type | `{ components, bitset, options }` |
 
 ## Dependencies
 
 | Package | Version |
 |---------|---------|
-| `@serbanghita-gamedev/bitmask` | ^1.1.0 |
+| `@serbanghita-gamedev/bitmask` | ^2.0.1 (`bitset` namespace) |
 
 ## Development
 
@@ -60,6 +61,13 @@ A TypeScript ECS library using bitmask-based component matching for fast entity 
 - `none` — Entity must NOT have ANY of the listed components
 - Evaluation order: `none` (most restrictive) → `all` → `any`
 - Queries are reactive — auto-update when entities gain/lose components
+
+## Bitset Representation
+
+- `ComponentRegistry.registerComponent` assigns `prototype.bitIndex` = 0, 1, 2, ... in registration order
+- `ComponentRegistry.getBitsetCapacity()` is the component count rounded up to a 32-bit word, minimum 32
+- `Entity.componentsBitset` and `Query.all/any/none` are `Uint32Array` created from the registry capacity; an entity grows its bitset in `addComponent` if a later-registered component does not fit
+- `ComponentRegistry.reset()` clears the singleton in place, so references held by tests stay valid
 
 ## Coding Guidelines
 
