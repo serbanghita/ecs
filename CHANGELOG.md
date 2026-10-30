@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-30
+
 ### Fixed
 - Component identity can no longer be corrupted (serbanghita/ecs#1):
   - registering the same class twice advanced its bit index, so a second `World` registering the same components invalidated the entities and queries of the first; registration is now idempotent per class
@@ -24,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `ComponentRegistry.reset()` throws `reset() was called while a World frame is running; defer it with queueMicrotask.` when called from a system, from `callbackFnAfterSystemsUpdate`, or from an event handler they invoke. Migration: wrap the reset in `queueMicrotask`
 - `registerComponentGroup` throws `Please register the component X in the ComponentRegistry before adding it to the group "g".` for an unregistered member, is a no-op when the same group is registered again with the same members and options, throws `A component group named "g" is already registered with different members.` otherwise, and throws `Component X already belongs to the group "h".` when a member is in another group
 - New public members: `ComponentRegistry.generation`, `ComponentRegistry.indexOf(ctor)`, `World.assertRegistryIsCurrent()`
+- The npm package ships TypeScript source only; `dist/ecs.js` is no longer included
+- First 2.x version on npm; see the 2.0.0 entry for the migration from 1.x
 
 ## [2.0.0] - 2026-10-29
 

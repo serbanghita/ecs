@@ -6,24 +6,6 @@
       __defProp(target, name, { get: all[name], enumerable: true });
   };
 
-  // src/Component.ts
-  var Component = class {
-    constructor(properties) {
-      this.properties = properties;
-    }
-    static {
-      __name(this, "Component");
-    }
-    // Lazy init / Re-init.
-    init(properties) {
-      this.properties = properties || {};
-    }
-    // Use this when saving the state.
-    serialize() {
-      return this.properties;
-    }
-  };
-
   // node_modules/@serbanghita-gamedev/bitmask/src/bitset.ts
   var bitset_exports = {};
   __export(bitset_exports, {
@@ -145,14 +127,37 @@
   }
   __name(toBinaryString, "toBinaryString");
 
+  // src/frameGuard.ts
+  var framesInProgress = 0;
+  function enterFrame() {
+    framesInProgress++;
+  }
+  __name(enterFrame, "enterFrame");
+  function exitFrame() {
+    if (framesInProgress > 0) {
+      framesInProgress--;
+    }
+  }
+  __name(exitFrame, "exitFrame");
+  function isFrameRunning() {
+    return framesInProgress > 0;
+  }
+  __name(isFrameRunning, "isFrameRunning");
+
   // src/ComponentRegistry.ts
   var WORD_BITS2 = 32;
+  function bitIndexOf(componentDeclaration) {
+    return ComponentRegistry.getInstance().indexOf(componentDeclaration);
+  }
+  __name(bitIndexOf, "bitIndexOf");
   var ComponentRegistry = class _ComponentRegistry {
     static {
       __name(this, "ComponentRegistry");
     }
     static instance;
     nextBitIndex = 0;
+    _generation = 0;
+    bitIndexByConstructor = /* @__PURE__ */ new Map();
     components = /* @__PURE__ */ new Map();
     componentGroups = /* @__PURE__ */ new Map();
     componentToGroupMap = /* @__PURE__ */ new Map();
@@ -165,17 +170,41 @@
       }
       return _ComponentRegistry.instance;
     }
+    /**
+     * Incremented by `reset()`. A `World` records the generation it was created
+     * in and refuses to work once the registry has been reset underneath it.
+     */
+    get generation() {
+      return this._generation;
+    }
+    indexOf(componentDeclaration) {
+      return this.bitIndexByConstructor.get(componentDeclaration);
+    }
+    /**
+     * Assigns a bit index to a component class. Registering the same class again
+     * is a no-op that keeps its existing index. Two distinct classes sharing a
+     * name are rejected because entities store components by name.
+     */
     registerComponent(componentDeclaration) {
-      if (componentDeclaration.prototype && typeof componentDeclaration.prototype === "object") {
-        const bitIndex = this.nextBitIndex++;
-        Object.defineProperty(componentDeclaration.prototype, "bitIndex", {
-          value: bitIndex,
-          writable: true,
-          configurable: true
-        });
-        this.bitIndexToComponentMap.set(bitIndex, componentDeclaration);
+      const declaration = componentDeclaration;
+      if (typeof declaration !== "function" || !("bitIndex" in Object(declaration.prototype))) {
+        throw new Error("Only classes extending Component can be registered.");
       }
-      this.components.set(componentDeclaration.prototype.constructor.name, componentDeclaration);
+      if (declaration.name === "") {
+        throw new Error("Component classes must have a non-empty name.");
+      }
+      if (this.bitIndexByConstructor.has(declaration)) {
+        return componentDeclaration;
+      }
+      const name = declaration.name;
+      const sameName = this.components.get(name);
+      if (sameName && sameName !== declaration) {
+        throw new Error(`A different component class named "${name}" is already registered.`);
+      }
+      const bitIndex = this.nextBitIndex++;
+      this.bitIndexByConstructor.set(declaration, bitIndex);
+      this.bitIndexToComponentMap.set(bitIndex, declaration);
+      this.components.set(name, declaration);
       return componentDeclaration;
     }
     registerComponents(componentDeclarations) {
@@ -194,10 +223,32 @@
       return this.bitIndexToComponentMap.get(bitIndex);
     }
     registerComponentGroup(groupName, components, options = {}) {
+      const bitIndices = components.map((component) => {
+        const bitIndex = this.indexOf(component);
+        if (typeof bitIndex === "undefined") {
+          throw new Error(`Please register the component ${component.name} in the ComponentRegistry before adding it to the group "${groupName}".`);
+        }
+        return bitIndex;
+      });
+      const existing = this.componentGroups.get(groupName);
+      if (existing) {
+        const sameMembers = existing.components.length === components.length && existing.components.every((member, i) => member === components[i]);
+        const sameOptions = Boolean(existing.options.mutuallyExclusive) === Boolean(options.mutuallyExclusive);
+        if (sameMembers && sameOptions) {
+          return;
+        }
+        throw new Error(`A component group named "${groupName}" is already registered with different members.`);
+      }
+      bitIndices.forEach((bitIndex, i) => {
+        const otherGroup = this.componentToGroupMap.get(bitIndex);
+        if (otherGroup !== void 0) {
+          throw new Error(`Component ${components[i].name} already belongs to the group "${otherGroup}".`);
+        }
+      });
       const groupBitset = this.createBitset();
-      for (const component of components) {
-        bitset_exports.setBit(groupBitset, component.prototype.bitIndex);
-        this.componentToGroupMap.set(component.prototype.bitIndex, groupName);
+      for (const bitIndex of bitIndices) {
+        bitset_exports.setBit(groupBitset, bitIndex);
+        this.componentToGroupMap.set(bitIndex, groupName);
       }
       this.componentGroups.set(groupName, { components, bitset: groupBitset, options });
     }
@@ -220,8 +271,18 @@
     createBitset() {
       return bitset_exports.create(this.getBitsetCapacity());
     }
+    /**
+     * Forgets every registration and advances the generation. Classes registered
+     * before the reset lose their bit index, and worlds created before the reset
+     * throw on their next entity or query operation.
+     */
     reset() {
+      if (isFrameRunning()) {
+        throw new Error("reset() was called while a World frame is running; defer it with queueMicrotask.");
+      }
       this.nextBitIndex = 0;
+      this._generation++;
+      this.bitIndexByConstructor.clear();
       this.components.clear();
       this.componentGroups.clear();
       this.componentToGroupMap.clear();
@@ -229,11 +290,37 @@
     }
   };
 
+  // src/Component.ts
+  var Component = class {
+    constructor(properties) {
+      this.properties = properties;
+    }
+    static {
+      __name(this, "Component");
+    }
+    // Lazy init / Re-init.
+    init(properties) {
+      this.properties = properties || {};
+    }
+    // Use this when saving the state.
+    serialize() {
+      return this.properties;
+    }
+  };
+  Object.defineProperty(Component.prototype, "bitIndex", {
+    get() {
+      return bitIndexOf(this.constructor);
+    },
+    enumerable: false,
+    configurable: false
+  });
+
   // src/Entity.ts
   var Entity = class {
     constructor(world, id) {
       this.world = world;
       this.id = id;
+      world.assertRegistryIsCurrent();
       this.componentsBitset = world.declarations.components.createBitset();
     }
     static {
@@ -242,37 +329,42 @@
     componentsBitset;
     components = /* @__PURE__ */ new Map();
     addComponent(componentDeclaration, ...args) {
+      this.world.assertRegistryIsCurrent();
+      const bitIndex = bitIndexOf(componentDeclaration);
+      if (typeof bitIndex === "undefined") {
+        throw new Error(`Please register the component ${componentDeclaration.name} in the ComponentRegistry.`);
+      }
       const properties = args[0] ?? {};
       let instance = this.components.get(componentDeclaration.name);
-      if (instance) {
+      if (instance && instance.constructor === componentDeclaration) {
         instance.init(properties);
       } else {
         instance = new componentDeclaration(properties);
       }
-      if (typeof instance.bitIndex === "undefined") {
-        throw new Error(`Please register the component ${instance.constructor.name} in the ComponentRegistry.`);
+      if (Object.prototype.hasOwnProperty.call(instance, "bitIndex")) {
+        throw new Error(`Component ${componentDeclaration.name} must not declare its own "bitIndex" field; it is assigned by the ComponentRegistry.`);
       }
       const componentRegistry = this.world.declarations.components;
-      const groupName = componentRegistry.getComponentGroupName(instance.bitIndex);
+      const groupName = componentRegistry.getComponentGroupName(bitIndex);
       if (groupName) {
         const group = componentRegistry.getComponentGroup(groupName);
         if (group && group.options.mutuallyExclusive && bitset_exports.hasAnyBits(this.componentsBitset, group.bitset)) {
           for (const groupComponent of group.components) {
-            if (groupComponent !== componentDeclaration && bitset_exports.testBit(this.componentsBitset, groupComponent.prototype.bitIndex)) {
+            if (groupComponent !== componentDeclaration && this.hasComponent(groupComponent)) {
               this.removeComponent(groupComponent);
             }
           }
         }
       }
       this.components.set(componentDeclaration.name, instance);
-      this.ensureBitsetCapacity(instance.bitIndex);
-      bitset_exports.setBit(this.componentsBitset, instance.bitIndex);
+      this.ensureBitsetCapacity(bitIndex);
+      bitset_exports.setBit(this.componentsBitset, bitIndex);
       this.onAddComponent(instance);
       return this;
     }
     getComponent(declaration) {
       const instance = this.components.get(declaration.name);
-      if (!instance) {
+      if (!instance || instance.constructor !== declaration) {
         throw new Error(`Component requested ${declaration.name} is non-existent.`);
       }
       return instance;
@@ -285,23 +377,24 @@
       return instance;
     }
     removeComponent(componentDeclaration) {
+      this.world.assertRegistryIsCurrent();
       if (!this.hasComponent(componentDeclaration)) {
         return this;
       }
       const component = this.getComponent(componentDeclaration);
-      if (typeof component.bitIndex === "undefined") {
-        throw new Error(`Component ${componentDeclaration.name} has no bit index.`);
-      }
-      bitset_exports.clearBit(this.componentsBitset, component.bitIndex);
+      const bitIndex = bitIndexOf(componentDeclaration);
+      bitset_exports.clearBit(this.componentsBitset, bitIndex);
       this.components.delete(componentDeclaration.name);
       this.onRemoveComponent(component);
       return this;
     }
     hasComponent(componentDeclaration) {
-      if (typeof componentDeclaration.prototype.bitIndex === "undefined") {
+      this.world.assertRegistryIsCurrent();
+      const bitIndex = bitIndexOf(componentDeclaration);
+      if (typeof bitIndex === "undefined") {
         throw new Error(`Please register the component ${componentDeclaration.name} in the ComponentRegistry.`);
       }
-      return bitset_exports.testBit(this.componentsBitset, componentDeclaration.prototype.bitIndex);
+      return bitset_exports.testBit(this.componentsBitset, bitIndex);
     }
     /**
      * Components registered after this entity was created may not fit in its
@@ -338,6 +431,7 @@
       this.world = world;
       this.id = id;
       this.filters = filters;
+      world.assertRegistryIsCurrent();
       const registry = world.declarations.components;
       this.all = registry.createBitset();
       this.any = registry.createBitset();
@@ -363,7 +457,7 @@
           }, [])
         )
       ].forEach((component) => {
-        if (typeof component.prototype.bitIndex === "undefined") {
+        if (typeof bitIndexOf(component) === "undefined") {
           throw new Error(`Please register the component ${component.name} in the ComponentRegistry.`);
         }
       });
@@ -371,19 +465,19 @@
     processFiltersAsBitsets() {
       if (this.filters.all) {
         this.filters.all.forEach((component) => {
-          bitset_exports.setBit(this.all, component.prototype.bitIndex);
+          bitset_exports.setBit(this.all, bitIndexOf(component));
         });
         this.hasAll = !bitset_exports.isEmpty(this.all);
       }
       if (this.filters.any) {
         this.filters.any.forEach((component) => {
-          bitset_exports.setBit(this.any, component.prototype.bitIndex);
+          bitset_exports.setBit(this.any, bitIndexOf(component));
         });
         this.hasAny = !bitset_exports.isEmpty(this.any);
       }
       if (this.filters.none) {
         this.filters.none.forEach((component) => {
-          bitset_exports.setBit(this.none, component.prototype.bitIndex);
+          bitset_exports.setBit(this.none, bitIndexOf(component));
         });
         this.hasNone = !bitset_exports.isEmpty(this.none);
       }
@@ -477,6 +571,7 @@
     declarations = {
       components: ComponentRegistry.getInstance()
     };
+    registryGeneration = this.declarations.components.generation;
     queries = /* @__PURE__ */ new Map();
     entities = /* @__PURE__ */ new Map();
     systems = /* @__PURE__ */ new Map();
@@ -496,6 +591,16 @@
     // Shortcut to ComponentRegistry
     registerComponents(componentDeclarations) {
       this.declarations.components.registerComponents(componentDeclarations);
+    }
+    /**
+     * Entities and queries store bit indices handed out by the registry. Once the
+     * registry has been reset those indices may alias other components, so a
+     * world from an earlier generation must not be used any further.
+     */
+    assertRegistryIsCurrent() {
+      if (this.registryGeneration !== this.declarations.components.generation) {
+        throw new Error("The ComponentRegistry was reset after this World was created. Create a new World.");
+      }
     }
     createQuery(id, filters) {
       const query = new Query(this, id, filters);
@@ -574,12 +679,13 @@
      * @param component
      */
     notifyQueriesOfEntityComponentAddition(entity, component) {
+      const bitIndex = bitIndexOf(component.constructor);
       this.queries.forEach((query) => {
-        if (bitset_exports.testBit(query.none, component.bitIndex)) {
+        if (bitset_exports.testBit(query.none, bitIndex)) {
           query.remove(entity);
           return;
         }
-        if (bitset_exports.testBit(query.all, component.bitIndex) || bitset_exports.testBit(query.any, component.bitIndex)) {
+        if (bitset_exports.testBit(query.all, bitIndex) || bitset_exports.testBit(query.any, bitIndex)) {
           query.candidate(entity);
         }
       });
@@ -593,32 +699,39 @@
      * @param component
      */
     notifyQueriesOfEntityComponentRemoval(entity, component) {
+      const bitIndex = bitIndexOf(component.constructor);
       this.queries.forEach((query) => {
-        if (bitset_exports.testBit(query.all, component.bitIndex)) {
+        if (bitset_exports.testBit(query.all, bitIndex)) {
           query.remove(entity);
           return;
         }
-        if (bitset_exports.testBit(query.any, component.bitIndex)) {
+        if (bitset_exports.testBit(query.any, bitIndex)) {
           query.remove(entity);
           query.candidate(entity);
           return;
         }
-        if (bitset_exports.testBit(query.none, component.bitIndex)) {
+        if (bitset_exports.testBit(query.none, bitIndex)) {
           query.candidate(entity);
         }
       });
     }
     start(options) {
+      this.assertRegistryIsCurrent();
       if (options) {
         this.fpsCap = options.fpsCap || 0;
         if (options.callbackFnAfterSystemsUpdate) {
           this.callbackFnAfterSystemsUpdate = options.callbackFnAfterSystemsUpdate;
         }
       }
-      [...this.systems].filter(([, systemInstance]) => systemInstance.settings.ticksToRunBeforeExit === 1).forEach(([systemDeclaration, systemInstance]) => {
-        systemInstance.update();
-        this.systems.delete(systemDeclaration);
-      });
+      enterFrame();
+      try {
+        [...this.systems].filter(([, systemInstance]) => systemInstance.settings.ticksToRunBeforeExit === 1).forEach(([systemDeclaration, systemInstance]) => {
+          systemInstance.update();
+          this.systems.delete(systemDeclaration);
+        });
+      } finally {
+        exitFrame();
+      }
       this.startLoop();
     }
     startLoop() {
@@ -672,17 +785,22 @@
         }
         this.fps = fps;
         this.frameDuration = frameTimeDiff;
-        this.systems.forEach((system, systemDeclaration) => {
-          if (system.isPaused || !system.preUpdate()) {
-            return;
+        enterFrame();
+        try {
+          this.systems.forEach((system, systemDeclaration) => {
+            if (system.isPaused || !system.preUpdate()) {
+              return;
+            }
+            system.update(now);
+            if (system.settings.ticksToRunBeforeExit > 0 && ++system.updatesRun >= system.settings.ticksToRunBeforeExit) {
+              this.systems.delete(systemDeclaration);
+            }
+          });
+          if (this.callbackFnAfterSystemsUpdate) {
+            this.callbackFnAfterSystemsUpdate();
           }
-          system.update(now);
-          if (system.settings.ticksToRunBeforeExit > 0 && ++system.updatesRun >= system.settings.ticksToRunBeforeExit) {
-            this.systems.delete(systemDeclaration);
-          }
-        });
-        if (this.callbackFnAfterSystemsUpdate) {
-          this.callbackFnAfterSystemsUpdate();
+        } finally {
+          exitFrame();
         }
         this._animationFrameId = requestAnimationFrame(loop);
       }, "loop");

@@ -1,5 +1,7 @@
 # Dev/build tooling
 .claude/
+.planning/
+.gitattributes
 .editorconfig
 .prettierrc
 .prettierignore
@@ -17,11 +19,7 @@ src/tests/
 src/demo/
 src/example.ts
 src/fixtures.ts
-dist/demo.html
-dist/demo.js
-dist/demo.js.map
-dist/example.html
-dist/example.js
+dist/
 
 # CI & docs
 .github/
