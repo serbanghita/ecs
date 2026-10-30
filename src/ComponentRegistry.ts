@@ -1,4 +1,4 @@
-import { Component } from "./Component.ts";
+import type { Component } from "./Component.ts";
 import { bitset } from "@serbanghita-gamedev/bitmask";
 
 export type ComponentConstructor<
@@ -18,10 +18,20 @@ export type ComponentGroup = {
 
 const WORD_BITS = 32;
 
+/**
+ * The bit index the registry assigned to exactly this class, or `undefined`.
+ * Subclasses do not inherit their parent's index.
+ */
+export function bitIndexOf(componentDeclaration: typeof Component): number | undefined {
+  return ComponentRegistry.getInstance().indexOf(componentDeclaration);
+}
+
 export class ComponentRegistry {
   private static instance: ComponentRegistry;
 
   private nextBitIndex = 0;
+  private _generation = 0;
+  private bitIndexByConstructor: Map<typeof Component, number> = new Map();
   private components: Map<string, typeof Component> = new Map();
   private componentGroups: Map<string, ComponentGroup> = new Map();
   private componentToGroupMap: Map<number, string> = new Map();
@@ -36,17 +46,48 @@ export class ComponentRegistry {
     return ComponentRegistry.instance;
   }
 
+  /**
+   * Incremented by `reset()`. A `World` records the generation it was created
+   * in and refuses to work once the registry has been reset underneath it.
+   */
+  public get generation(): number {
+    return this._generation;
+  }
+
+  public indexOf(componentDeclaration: ComponentConstructor | typeof Component): number | undefined {
+    return this.bitIndexByConstructor.get(componentDeclaration as typeof Component);
+  }
+
+  /**
+   * Assigns a bit index to a component class. Registering the same class again
+   * is a no-op that keeps its existing index. Two distinct classes sharing a
+   * name are rejected because entities store components by name.
+   */
   public registerComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp) {
-    if (componentDeclaration.prototype && typeof componentDeclaration.prototype === "object") {
-      const bitIndex = this.nextBitIndex++;
-      Object.defineProperty(componentDeclaration.prototype, "bitIndex", {
-        value: bitIndex,
-        writable: true,
-        configurable: true,
-      });
-      this.bitIndexToComponentMap.set(bitIndex, componentDeclaration as typeof Component);
+    const declaration = componentDeclaration as unknown as typeof Component;
+
+    if (typeof declaration !== "function" || !("bitIndex" in Object(declaration.prototype))) {
+      throw new Error("Only classes extending Component can be registered.");
     }
-    this.components.set(componentDeclaration.prototype.constructor.name, componentDeclaration as typeof Component);
+
+    if (declaration.name === "") {
+      throw new Error("Component classes must have a non-empty name.");
+    }
+
+    if (this.bitIndexByConstructor.has(declaration)) {
+      return componentDeclaration;
+    }
+
+    const name = declaration.name;
+    const sameName = this.components.get(name);
+    if (sameName && sameName !== declaration) {
+      throw new Error(`A different component class named "${name}" is already registered.`);
+    }
+
+    const bitIndex = this.nextBitIndex++;
+    this.bitIndexByConstructor.set(declaration, bitIndex);
+    this.bitIndexToComponentMap.set(bitIndex, declaration);
+    this.components.set(name, declaration);
 
     return componentDeclaration;
   }
@@ -71,10 +112,18 @@ export class ComponentRegistry {
   }
 
   public registerComponentGroup<T extends Array<ComponentConstructor>>(groupName: string, components: [...T], options: ComponentGroupOptions = {}) {
+    const bitIndices = components.map((component) => {
+      const bitIndex = this.indexOf(component);
+      if (typeof bitIndex === "undefined") {
+        throw new Error(`Please register the component ${component.name} in the ComponentRegistry before adding it to the group "${groupName}".`);
+      }
+      return bitIndex;
+    });
+
     const groupBitset = this.createBitset();
-    for (const component of components) {
-      bitset.setBit(groupBitset, component.prototype.bitIndex);
-      this.componentToGroupMap.set(component.prototype.bitIndex, groupName);
+    for (const bitIndex of bitIndices) {
+      bitset.setBit(groupBitset, bitIndex);
+      this.componentToGroupMap.set(bitIndex, groupName);
     }
     this.componentGroups.set(groupName, { components, bitset: groupBitset, options });
   }
@@ -103,8 +152,15 @@ export class ComponentRegistry {
     return bitset.create(this.getBitsetCapacity());
   }
 
+  /**
+   * Forgets every registration and advances the generation. Classes registered
+   * before the reset lose their bit index, and worlds created before the reset
+   * throw on their next entity or query operation.
+   */
   public reset() {
     this.nextBitIndex = 0;
+    this._generation++;
+    this.bitIndexByConstructor.clear();
     this.components.clear();
     this.componentGroups.clear();
     this.componentToGroupMap.clear();
