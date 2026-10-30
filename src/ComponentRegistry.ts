@@ -120,6 +120,23 @@ export class ComponentRegistry {
       return bitIndex;
     });
 
+    const existing = this.componentGroups.get(groupName);
+    if (existing) {
+      const sameMembers = existing.components.length === components.length && existing.components.every((member, i) => member === components[i]);
+      const sameOptions = Boolean(existing.options.mutuallyExclusive) === Boolean(options.mutuallyExclusive);
+      if (sameMembers && sameOptions) {
+        return;
+      }
+      throw new Error(`A component group named "${groupName}" is already registered with different members.`);
+    }
+
+    bitIndices.forEach((bitIndex, i) => {
+      const otherGroup = this.componentToGroupMap.get(bitIndex);
+      if (otherGroup !== undefined) {
+        throw new Error(`Component ${components[i].name} already belongs to the group "${otherGroup}".`);
+      }
+    });
+
     const groupBitset = this.createBitset();
     for (const bitIndex of bitIndices) {
       bitset.setBit(groupBitset, bitIndex);

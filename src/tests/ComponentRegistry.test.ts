@@ -312,6 +312,47 @@ describe("ComponentRegistry", () => {
       expect(reg.getComponentGroupName(1)).toBeUndefined();
     });
 
+    it("re-registering a group with identical members and options is a no-op", () => {
+      const reg = ComponentRegistry.getInstance();
+      reg.registerComponents([Body, PositionOnScreen]);
+      reg.registerComponentGroup("g", [Body, PositionOnScreen], { mutuallyExclusive: true });
+      const first = reg.getComponentGroup("g");
+
+      reg.registerComponentGroup("g", [Body, PositionOnScreen], { mutuallyExclusive: true });
+
+      expect(reg.getComponentGroup("g")).toBe(first);
+      expect(reg.getComponentGroupName(0)).toBe("g");
+      expect(reg.getComponentGroupName(1)).toBe("g");
+    });
+
+    it("re-registering a group with different members or options throws and keeps the old group", () => {
+      const reg = ComponentRegistry.getInstance();
+      reg.registerComponents([Body, PositionOnScreen, Keyboard]);
+      reg.registerComponentGroup("g", [Body, PositionOnScreen], { mutuallyExclusive: true });
+
+      expect(() => reg.registerComponentGroup("g", [PositionOnScreen, Keyboard], { mutuallyExclusive: true })).toThrow(
+        /named "g" is already registered with different members/,
+      );
+      expect(() => reg.registerComponentGroup("g", [Body, PositionOnScreen], { mutuallyExclusive: false })).toThrow(/different members/);
+      expect(reg.getComponentGroupName(reg.indexOf(Body) as number)).toBe("g");
+      expect(reg.getComponentGroupName(reg.indexOf(Keyboard) as number)).toBeUndefined();
+
+      const entity = new World().createEntity("e1").addComponent(PositionOnScreen, { x: 0, y: 0 });
+      entity.addComponent(Body, { width: 1, height: 1 });
+      expect(entity.hasComponent(PositionOnScreen)).toBe(false);
+      expect(entity.hasComponent(Body)).toBe(true);
+    });
+
+    it("a component cannot belong to two groups", () => {
+      const reg = ComponentRegistry.getInstance();
+      reg.registerComponents([Body, PositionOnScreen, Keyboard]);
+      reg.registerComponentGroup("g", [Body, PositionOnScreen]);
+
+      expect(() => reg.registerComponentGroup("h", [PositionOnScreen, Keyboard])).toThrow(/PositionOnScreen already belongs to the group "g"/);
+      expect(reg.getComponentGroup("h")).toBeUndefined();
+      expect(reg.getComponentGroupName(reg.indexOf(Keyboard) as number)).toBeUndefined();
+    });
+
     it("rejects values that are not component classes without consuming a bit index", () => {
       const reg = ComponentRegistry.getInstance();
       class Plain {
