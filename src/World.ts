@@ -32,6 +32,9 @@ export class World {
   public now: DOMHighResTimeStamp = 0;
   private _animationFrameId: number = 0;
   private _paused: boolean = false;
+  // Identifies the current loop. start() and stop() advance it, and a loop
+  // closure keeps running only while its captured id still matches.
+  private _loopId: number = 0;
 
   // Shortcut to ComponentRegistry
   public registerComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp) {
@@ -202,6 +205,7 @@ export class World {
 
   public start(options?: WorldStartOptions) {
     this.assertRegistryIsCurrent();
+    const loopId = ++this._loopId;
     if (options) {
       this.fpsCap = options.fpsCap || 0;
       if (options.callbackFnAfterSystemsUpdate) {
@@ -222,10 +226,16 @@ export class World {
       exitFrame();
     }
 
+    // A one-shot system may have stopped the world.
+    if (this._loopId !== loopId) {
+      return;
+    }
+
     this.startLoop();
   }
 
   private startLoop() {
+    const myLoopId = this._loopId;
     // Timestamp trackers use -1 as the "uninitialized" sentinel because 0 is a
     // valid rAF timestamp.
     let frameTimeDiff = 0;
@@ -245,6 +255,11 @@ export class World {
     let fpsCapLastFrameTime = -1;
 
     const loop = (now: DOMHighResTimeStamp) => {
+      // A frame queued before stop() that cancelAnimationFrame did not catch.
+      if (this._loopId !== myLoopId) {
+        return;
+      }
+
       this.now = now;
 
       if (this._paused) {
@@ -305,7 +320,7 @@ export class World {
       enterFrame();
       try {
         this.systems.forEach((system, systemDeclaration) => {
-          if (system.isPaused || !system.preUpdate()) {
+          if (this._loopId !== myLoopId || system.isPaused || !system.preUpdate()) {
             return;
           }
           system.update(now);
@@ -314,11 +329,16 @@ export class World {
           }
         });
 
-        if (this.callbackFnAfterSystemsUpdate) {
+        if (this._loopId === myLoopId && this.callbackFnAfterSystemsUpdate) {
           this.callbackFnAfterSystemsUpdate();
         }
       } finally {
         exitFrame();
+      }
+
+      // Stopped (or restarted) during this frame: let this loop end here.
+      if (this._loopId !== myLoopId) {
+        return;
       }
 
       this._animationFrameId = requestAnimationFrame(loop);
@@ -336,6 +356,7 @@ export class World {
   }
 
   public stop() {
+    this._loopId++;
     if (this._animationFrameId) {
       cancelAnimationFrame(this._animationFrameId);
       this._animationFrameId = 0;

@@ -423,3 +423,159 @@ describe("frame guard", () => {
     expect(entity.hasComponent(PositionOnScreen)).toBe(true);
   });
 });
+
+describe("stop inside a frame", () => {
+  let callbacks: FrameRequestCallback[];
+  let requested: number;
+  let originalRaf: typeof requestAnimationFrame;
+  let originalCaf: typeof cancelAnimationFrame;
+
+  beforeEach(() => {
+    ComponentRegistry.getInstance().reset();
+    callbacks = [];
+    requested = 0;
+    originalRaf = globalThis.requestAnimationFrame;
+    originalCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = vi.fn((cb: FrameRequestCallback) => {
+      callbacks.push(cb);
+      return ++requested;
+    }) as unknown as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = vi.fn() as unknown as typeof cancelAnimationFrame;
+  });
+
+  afterEach(() => {
+    globalThis.requestAnimationFrame = originalRaf;
+    globalThis.cancelAnimationFrame = originalCaf;
+  });
+
+  const runQueuedFrame = (now = 16) => {
+    const callback = callbacks.shift();
+    if (!callback) {
+      throw new Error("No frame queued.");
+    }
+    callback(now);
+  };
+
+  class StoppingSystem extends System {
+    public updates = 0;
+    public update(): void {
+      this.updates++;
+      this.world.stop();
+    }
+  }
+
+  it("a system that calls stop() ends the loop: no frame is queued after that frame", () => {
+    const world = new World();
+    const system = world.createSystem(StoppingSystem, world.createQuery("q", {}));
+    world.start();
+    expect(requested).toBe(1);
+
+    runQueuedFrame();
+
+    expect(system.updates).toBe(1);
+    expect(requested).toBe(1);
+    expect(callbacks.length).toBe(0);
+  });
+
+  it("a frame queued before stop() that was not cancelled runs no system and requests no frame", () => {
+    const world = new World();
+    const system = world.createSystem(CountingSystem, world.createQuery("q", {}));
+    world.start();
+    const kept = callbacks.shift() as FrameRequestCallback;
+    world.stop();
+
+    kept(16);
+
+    expect(system.updateCount).toBe(0);
+    expect(requested).toBe(1);
+    expect(callbacks.length).toBe(0);
+  });
+
+  it("a system that calls clear() ends the loop", () => {
+    const world = new World();
+    class ClearingSystem extends System {
+      public update(): void {
+        this.world.clear();
+      }
+    }
+    world.createSystem(ClearingSystem, world.createQuery("q", {}));
+    world.start();
+
+    runQueuedFrame();
+
+    expect(requested).toBe(1);
+    expect(callbacks.length).toBe(0);
+  });
+
+  it("stop() from callbackFnAfterSystemsUpdate ends the loop", () => {
+    const world = new World();
+    world.createSystem(CountingSystem, world.createQuery("q", {}));
+    world.start({ callbackFnAfterSystemsUpdate: () => world.stop() });
+
+    runQueuedFrame();
+
+    expect(requested).toBe(1);
+    expect(callbacks.length).toBe(0);
+  });
+
+  it("a system registered after the stopping one does not run in that frame", () => {
+    const world = new World();
+    world.createSystem(StoppingSystem, world.createQuery("q", {}));
+    const later = world.createSystem(CountingSystem, world.createQuery("q2", {}));
+    world.start();
+
+    runQueuedFrame();
+
+    expect(later.updateCount).toBe(0);
+  });
+
+  it("a one-shot system that calls stop() prevents the loop from starting", () => {
+    const world = new World();
+    world.createSystem(StoppingSystem, world.createQuery("q", {})).runOnlyOnce();
+
+    world.start();
+
+    expect(requested).toBe(0);
+    expect(callbacks.length).toBe(0);
+  });
+
+  it("stop() then start() inside a frame leaves exactly one loop", () => {
+    const world = new World();
+    class RestartingSystem extends System {
+      public updates = 0;
+      public update(): void {
+        this.updates++;
+        if (this.updates === 1) {
+          this.world.stop();
+          this.world.start();
+        }
+      }
+    }
+    const restarting = world.createSystem(RestartingSystem, world.createQuery("q", {}));
+    const counting = world.createSystem(CountingSystem, world.createQuery("q2", {}));
+    world.start();
+
+    runQueuedFrame(16);
+    expect(callbacks.length).toBe(1);
+
+    runQueuedFrame(32);
+    expect(restarting.updates).toBe(2);
+    expect(counting.updateCount).toBe(1);
+    expect(callbacks.length).toBe(1);
+  });
+
+  it("stop() then start() outside a frame runs again", () => {
+    const world = new World();
+    const system = world.createSystem(CountingSystem, world.createQuery("q", {}));
+    world.start();
+    world.stop();
+    callbacks.length = 0;
+
+    world.start();
+    runQueuedFrame();
+
+    expect(system.updateCount).toBe(1);
+    expect(callbacks.length).toBe(1);
+  });
+});
+
