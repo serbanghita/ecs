@@ -9,9 +9,9 @@ describe("Component Groups", () => {
   let registry: ComponentRegistry;
 
   beforeEach(() => {
-    world = new World();
     registry = ComponentRegistry.getInstance();
     registry.reset();
+    world = new World();
     registry.registerComponent(Idle);
     registry.registerComponent(Walking);
     registry.registerComponent(Attacking);

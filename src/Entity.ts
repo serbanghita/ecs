@@ -11,6 +11,7 @@ export class Entity {
     public world: World,
     public id: string,
   ) {
+    world.assertRegistryIsCurrent();
     this.componentsBitset = world.declarations.components.createBitset();
   }
 

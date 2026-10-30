@@ -54,7 +54,6 @@ export class World {
   }
 
   public createQuery(id: string, filters: IQueryFilters): Query {
-    this.assertRegistryIsCurrent();
     const query = new Query(this, id, filters);
     const existing = this.queries.get(id);
 
@@ -87,7 +86,6 @@ export class World {
   }
 
   public createEntity(id: string): Entity {
-    this.assertRegistryIsCurrent();
     if (this.entities.has(id)) {
       throw new Error(`Entity with the id "${id}" already exists.`);
     }
@@ -202,6 +200,7 @@ export class World {
   }
 
   public start(options?: WorldStartOptions) {
+    this.assertRegistryIsCurrent();
     if (options) {
       this.fpsCap = options.fpsCap || 0;
       if (options.callbackFnAfterSystemsUpdate) {

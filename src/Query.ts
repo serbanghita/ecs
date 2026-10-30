@@ -2,6 +2,7 @@ import { Entity } from "./Entity.ts";
 import { Component } from "./Component.ts";
 import { World } from "./World.ts";
 import { bitset } from "@serbanghita-gamedev/bitmask";
+import { bitIndexOf } from "./ComponentRegistry.ts";
 
 export type ComponentInQuery = new (...args: never[]) => Component<NonNullable<object>>;
 
@@ -33,6 +34,7 @@ export class Query {
     public id: string,
     public filters: IQueryFilters,
   ) {
+    world.assertRegistryIsCurrent();
     const registry = world.declarations.components;
     this.all = registry.createBitset();
     this.any = registry.createBitset();
@@ -51,7 +53,7 @@ export class Query {
         }, []),
       ),
     ].forEach((component) => {
-      if (typeof component.prototype.bitIndex === "undefined") {
+      if (typeof bitIndexOf(component) === "undefined") {
         throw new Error(`Please register the component ${component.name} in the ComponentRegistry.`);
       }
     });
@@ -60,21 +62,21 @@ export class Query {
   private processFiltersAsBitsets(): void {
     if (this.filters.all) {
       this.filters.all.forEach((component) => {
-        bitset.setBit(this.all, component.prototype.bitIndex);
+        bitset.setBit(this.all, bitIndexOf(component as unknown as typeof Component) as number);
       });
       this.hasAll = !bitset.isEmpty(this.all);
     }
 
     if (this.filters.any) {
       this.filters.any.forEach((component) => {
-        bitset.setBit(this.any, component.prototype.bitIndex);
+        bitset.setBit(this.any, bitIndexOf(component as unknown as typeof Component) as number);
       });
       this.hasAny = !bitset.isEmpty(this.any);
     }
 
     if (this.filters.none) {
       this.filters.none.forEach((component) => {
-        bitset.setBit(this.none, component.prototype.bitIndex);
+        bitset.setBit(this.none, bitIndexOf(component as unknown as typeof Component) as number);
       });
       this.hasNone = !bitset.isEmpty(this.none);
     }

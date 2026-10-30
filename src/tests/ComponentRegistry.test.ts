@@ -1,6 +1,8 @@
 import { ComponentRegistry } from "../ComponentRegistry.ts";
 import { Component } from "../Component.ts";
 import { World } from "../World.ts";
+import { Entity } from "../Entity.ts";
+import { Query } from "../Query.ts";
 import { Body, Keyboard, PositionOnScreen } from "../fixtures.ts";
 import { afterEach, describe } from "vitest";
 import { bitset } from "@serbanghita-gamedev/bitmask";
@@ -294,6 +296,9 @@ describe("ComponentRegistry", () => {
       expect(() => entity.removeComponent(Body)).toThrow(stale);
       expect(() => oldWorld.createEntity("e2")).toThrow(stale);
       expect(() => oldWorld.createQuery("positions", { all: [PositionOnScreen] })).toThrow(stale);
+      expect(() => new Entity(oldWorld, "x")).toThrow(stale);
+      expect(() => new Query(oldWorld, "q", { all: [PositionOnScreen] })).toThrow(stale);
+      expect(() => oldWorld.start()).toThrow(stale);
 
       const newWorld = new World();
       const fresh = newWorld.createEntity("e1").addComponent(PositionOnScreen, { x: 0, y: 0 });
