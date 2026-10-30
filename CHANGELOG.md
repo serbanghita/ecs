@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-30
+
 ### Fixed
 - `World.stop()` and `World.clear()` now end the game loop when called from inside a frame (from a system, from `callbackFnAfterSystemsUpdate` or from an event handler they invoke). Previously the frame that was already running requested the next frame anyway and the world looped forever. Each `start()` now owns a loop token: `stop()` retires it, a frame queued before the stop runs nothing, a one-shot system that stops the world prevents the loop from starting, and `start()` while a loop runs replaces that loop instead of adding a second one
 

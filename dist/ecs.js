@@ -584,6 +584,9 @@
     now = 0;
     _animationFrameId = 0;
     _paused = false;
+    // Identifies the current loop. start() and stop() advance it, and a loop
+    // closure keeps running only while its captured id still matches.
+    _loopId = 0;
     // Shortcut to ComponentRegistry
     registerComponent(componentDeclaration) {
       this.declarations.components.registerComponent(componentDeclaration);
@@ -717,6 +720,7 @@
     }
     start(options) {
       this.assertRegistryIsCurrent();
+      const loopId = ++this._loopId;
       if (options) {
         this.fpsCap = options.fpsCap || 0;
         if (options.callbackFnAfterSystemsUpdate) {
@@ -732,9 +736,13 @@
       } finally {
         exitFrame();
       }
+      if (this._loopId !== loopId) {
+        return;
+      }
       this.startLoop();
     }
     startLoop() {
+      const myLoopId = this._loopId;
       let frameTimeDiff = 0;
       let lastFrameTime = -1;
       let fps = 0;
@@ -746,6 +754,9 @@
       let fpsCapAccumulator = 0;
       let fpsCapLastFrameTime = -1;
       const loop = /* @__PURE__ */ __name((now) => {
+        if (this._loopId !== myLoopId) {
+          return;
+        }
         this.now = now;
         if (this._paused) {
           lastFrameTime = -1;
@@ -788,7 +799,7 @@
         enterFrame();
         try {
           this.systems.forEach((system, systemDeclaration) => {
-            if (system.isPaused || !system.preUpdate()) {
+            if (this._loopId !== myLoopId || system.isPaused || !system.preUpdate()) {
               return;
             }
             system.update(now);
@@ -796,11 +807,14 @@
               this.systems.delete(systemDeclaration);
             }
           });
-          if (this.callbackFnAfterSystemsUpdate) {
+          if (this._loopId === myLoopId && this.callbackFnAfterSystemsUpdate) {
             this.callbackFnAfterSystemsUpdate();
           }
         } finally {
           exitFrame();
+        }
+        if (this._loopId !== myLoopId) {
+          return;
         }
         this._animationFrameId = requestAnimationFrame(loop);
       }, "loop");
@@ -813,6 +827,7 @@
       this._paused = false;
     }
     stop() {
+      this._loopId++;
       if (this._animationFrameId) {
         cancelAnimationFrame(this._animationFrameId);
         this._animationFrameId = 0;
