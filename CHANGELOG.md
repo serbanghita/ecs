@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Component identity can no longer be corrupted (serbanghita/ecs#1):
+  - registering the same class twice advanced its bit index, so a second `World` registering the same components invalidated the entities and queries of the first; registration is now idempotent per class
+  - two distinct classes with the same name silently overwrote each other in `Entity.components`; the second registration now throws
+  - `reset()` left the old bit indices on the prototypes, so classes registered before a reset aliased classes registered after it; identity now lives in the registry and is cleared with it
+  - an unregistered subclass inherited its parent's bit index through the prototype chain and passed every registration check; it now reads `undefined`
+  - `registerComponentGroup` wrote half of its state before throwing on an unregistered member; it now validates every member first
+
+### Changed
+- `ComponentRegistry.registerComponent` throws `Only classes extending Component can be registered.` for values that are not `Component` subclasses and `Component classes must have a non-empty name.` for anonymous classes; a failed call never consumes a bit index. Migration: give factory-made classes a name
+- `ComponentRegistry.registerComponent` throws `A different component class named "X" is already registered.` when another class with that name is registered. Migration: keep class names unique across every package that registers into the same process; for hot module reloads that produce new constructors, call `reset()` and create a new `World`
+- `Component.prototype.bitIndex` is a non-configurable, read-only getter over the registry; assigning to it throws a `TypeError`, and `Entity.addComponent` rejects an instance that carries its own `bitIndex` field (`must not declare its own "bitIndex" field`). Subclasses may still write `declare readonly bitIndex: number`
+- `Entity.getComponent` throws `Component requested X is non-existent.` when the stored instance belongs to a different class with the same name
+- `ComponentRegistry.reset()` increments `ComponentRegistry.generation`; a `World` created before the reset throws `The ComponentRegistry was reset after this World was created. Create a new World.` from the `Entity` and `Query` constructors, `addComponent`, `hasComponent`, `removeComponent` and `start()`. Migration: after `reset()`, re-register and create a new `World`
+- `ComponentRegistry.reset()` throws `reset() was called while a World frame is running; defer it with queueMicrotask.` when called from a system, from `callbackFnAfterSystemsUpdate`, or from an event handler they invoke. Migration: wrap the reset in `queueMicrotask`
+- `registerComponentGroup` throws `Please register the component X in the ComponentRegistry before adding it to the group "g".` for an unregistered member, is a no-op when the same group is registered again with the same members and options, throws `A component group named "g" is already registered with different members.` otherwise, and throws `Component X already belongs to the group "h".` when a member is in another group
+- New public members: `ComponentRegistry.generation`, `ComponentRegistry.indexOf(ctor)`, `World.assertRegistryIsCurrent()`
+
 ## [2.0.0] - 2026-10-29
 
 ### Changed

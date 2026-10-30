@@ -14,6 +14,7 @@ A TypeScript ECS library using Uint32Array bitsets for component matching and fa
 | `src/Query.ts` | Filters entities using `all`/`any`/`none` bitset filters; reactive updates |
 | `src/System.ts` | Abstract base class with `update(now)`, tick scheduling, pause support |
 | `src/World.ts` | Main orchestration: game loop via rAF, entity/query/system management, FPS |
+| `src/frameGuard.ts` | Internal frame counter (not exported); `ComponentRegistry.reset()` throws while a `World` frame is running |
 | `src/fixtures.ts` | Test fixture components (Idle, Walking, Attacking, Renderable, etc.) |
 | `src/index.ts` | Public API re-exports |
 
@@ -64,10 +65,12 @@ A TypeScript ECS library using Uint32Array bitsets for component matching and fa
 
 ## Bitset Representation
 
-- `ComponentRegistry.registerComponent` assigns `prototype.bitIndex` = 0, 1, 2, ... in registration order
+- `ComponentRegistry.registerComponent` assigns bit index 0, 1, 2, ... in registration order; the index is stored in the registry keyed by constructor, and `Component.prototype.bitIndex` is a read-only getter over it (unregistered classes, including unregistered subclasses, read `undefined`)
+- Registering the same class twice is a no-op; a different class with an already registered name throws
 - `ComponentRegistry.getBitsetCapacity()` is the component count rounded up to a 32-bit word, minimum 32
 - `Entity.componentsBitset` and `Query.all/any/none` are `Uint32Array` created from the registry capacity; an entity grows its bitset in `addComponent` if a later-registered component does not fit
-- `ComponentRegistry.reset()` clears the singleton in place, so references held by tests stay valid
+- `ComponentRegistry.reset()` clears the singleton in place and bumps `generation`; a `World` created before the reset throws in the `Entity` and `Query` constructors, `addComponent`, `hasComponent`, `removeComponent` and `start()`. `reset()` itself throws while a `World` frame is running: defer it with `queueMicrotask`
+- `registerComponentGroup` validates every member first; registering a group again with identical members and options is a no-op, a different definition under the same name throws, and a component belongs to at most one group
 
 ## Coding Guidelines
 
