@@ -3,7 +3,7 @@ import { Entity } from "./Entity.ts";
 import { System } from "./System.ts";
 import { Query, IQueryFilters } from "./Query.ts";
 import { Component } from "./Component.ts";
-import { ComponentRegistry, ComponentConstructor } from "./ComponentRegistry.ts";
+import { ComponentRegistry, ComponentConstructor, bitIndexOf } from "./ComponentRegistry.ts";
 
 export type WorldStartOptions = {
   // Limit the FPS.
@@ -16,6 +16,8 @@ export class World {
   public declarations = {
     components: ComponentRegistry.getInstance(),
   };
+
+  private readonly registryGeneration = this.declarations.components.generation;
 
   public queries = new Map<string, Query>();
   public entities = new Map<string, Entity>();
@@ -40,7 +42,19 @@ export class World {
     this.declarations.components.registerComponents(componentDeclarations);
   }
 
+  /**
+   * Entities and queries store bit indices handed out by the registry. Once the
+   * registry has been reset those indices may alias other components, so a
+   * world from an earlier generation must not be used any further.
+   */
+  public assertRegistryIsCurrent() {
+    if (this.registryGeneration !== this.declarations.components.generation) {
+      throw new Error("The ComponentRegistry was reset after this World was created. Create a new World.");
+    }
+  }
+
   public createQuery(id: string, filters: IQueryFilters): Query {
+    this.assertRegistryIsCurrent();
     const query = new Query(this, id, filters);
     const existing = this.queries.get(id);
 
@@ -73,6 +87,7 @@ export class World {
   }
 
   public createEntity(id: string): Entity {
+    this.assertRegistryIsCurrent();
     if (this.entities.has(id)) {
       throw new Error(`Entity with the id "${id}" already exists.`);
     }
@@ -142,14 +157,15 @@ export class World {
    * @param component
    */
   public notifyQueriesOfEntityComponentAddition<T extends NonNullable<object>>(entity: Entity, component: Component<T>) {
+    const bitIndex = bitIndexOf(component.constructor as typeof Component) as number;
     this.queries.forEach((query) => {
       // If component is in 'none', remove entity from query
-      if (bitset.testBit(query.none, component.bitIndex)) {
+      if (bitset.testBit(query.none, bitIndex)) {
         query.remove(entity);
         return;
       }
       // If component is in 'all' or 'any', re-evaluate entity candidacy
-      if (bitset.testBit(query.all, component.bitIndex) || bitset.testBit(query.any, component.bitIndex)) {
+      if (bitset.testBit(query.all, bitIndex) || bitset.testBit(query.any, bitIndex)) {
         query.candidate(entity);
       }
     });
@@ -164,21 +180,22 @@ export class World {
    * @param component
    */
   public notifyQueriesOfEntityComponentRemoval<T extends NonNullable<object>>(entity: Entity, component: Component<T>) {
+    const bitIndex = bitIndexOf(component.constructor as typeof Component) as number;
     this.queries.forEach((query) => {
       // If component is in 'all', remove entity from query
-      if (bitset.testBit(query.all, component.bitIndex)) {
+      if (bitset.testBit(query.all, bitIndex)) {
         query.remove(entity);
         return;
       }
       // If component is in 'any', re-evaluate (entity may no longer have any of the required components)
-      if (bitset.testBit(query.any, component.bitIndex)) {
+      if (bitset.testBit(query.any, bitIndex)) {
         // Remove and re-candidate to properly check if entity still matches
         query.remove(entity);
         query.candidate(entity);
         return;
       }
       // If component is in 'none', re-evaluate entity candidacy
-      if (bitset.testBit(query.none, component.bitIndex)) {
+      if (bitset.testBit(query.none, bitIndex)) {
         query.candidate(entity);
       }
     });

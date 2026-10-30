@@ -247,6 +247,24 @@ describe("ComponentRegistry", () => {
       expect(reg.getComponentGroupName(0)).toBeUndefined();
     });
 
+    it("addComponent of an unregistered class throws before constructing it", () => {
+      const reg = ComponentRegistry.getInstance();
+      let constructed = 0;
+      class Counted extends Component<{ v?: number }> {
+        constructor(properties: { v?: number }) {
+          super(properties);
+          constructed++;
+        }
+      }
+      reg.registerComponent(Counted);
+      reg.reset();
+      reg.registerComponent(Body);
+      const entity = new World().createEntity("e1");
+
+      expect(() => entity.addComponent(Counted)).toThrow(/register the component Counted/);
+      expect(constructed).toBe(0);
+    });
+
     it("getComponent rejects a different class with the same name", () => {
       const reg = ComponentRegistry.getInstance();
       const First = defineNamed("Dup");
