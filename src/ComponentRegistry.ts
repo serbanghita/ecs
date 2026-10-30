@@ -1,5 +1,6 @@
 import type { Component } from "./Component.ts";
 import { bitset } from "@serbanghita-gamedev/bitmask";
+import { isFrameRunning } from "./frameGuard.ts";
 
 export type ComponentConstructor<
   TProps extends NonNullable<object> = NonNullable<object>,
@@ -175,6 +176,9 @@ export class ComponentRegistry {
    * throw on their next entity or query operation.
    */
   public reset() {
+    if (isFrameRunning()) {
+      throw new Error("reset() was called while a World frame is running; defer it with queueMicrotask.");
+    }
     this.nextBitIndex = 0;
     this._generation++;
     this.bitIndexByConstructor.clear();

@@ -4,6 +4,7 @@ import { System } from "./System.ts";
 import { Query, IQueryFilters } from "./Query.ts";
 import { Component } from "./Component.ts";
 import { ComponentRegistry, ComponentConstructor, bitIndexOf } from "./ComponentRegistry.ts";
+import { enterFrame, exitFrame } from "./frameGuard.ts";
 
 export type WorldStartOptions = {
   // Limit the FPS.
@@ -209,12 +210,17 @@ export class World {
     }
 
     // Run all systems that need to be run once and de-register them from the loop.
-    [...this.systems]
-      .filter(([, systemInstance]) => systemInstance.settings.ticksToRunBeforeExit === 1)
-      .forEach(([systemDeclaration, systemInstance]) => {
-        systemInstance.update();
-        this.systems.delete(systemDeclaration);
-      });
+    enterFrame();
+    try {
+      [...this.systems]
+        .filter(([, systemInstance]) => systemInstance.settings.ticksToRunBeforeExit === 1)
+        .forEach(([systemDeclaration, systemInstance]) => {
+          systemInstance.update();
+          this.systems.delete(systemDeclaration);
+        });
+    } finally {
+      exitFrame();
+    }
 
     this.startLoop();
   }
@@ -296,18 +302,23 @@ export class World {
       this.fps = fps;
       this.frameDuration = frameTimeDiff;
 
-      this.systems.forEach((system, systemDeclaration) => {
-        if (system.isPaused || !system.preUpdate()) {
-          return;
-        }
-        system.update(now);
-        if (system.settings.ticksToRunBeforeExit > 0 && ++system.updatesRun >= system.settings.ticksToRunBeforeExit) {
-          this.systems.delete(systemDeclaration);
-        }
-      });
+      enterFrame();
+      try {
+        this.systems.forEach((system, systemDeclaration) => {
+          if (system.isPaused || !system.preUpdate()) {
+            return;
+          }
+          system.update(now);
+          if (system.settings.ticksToRunBeforeExit > 0 && ++system.updatesRun >= system.settings.ticksToRunBeforeExit) {
+            this.systems.delete(systemDeclaration);
+          }
+        });
 
-      if (this.callbackFnAfterSystemsUpdate) {
-        this.callbackFnAfterSystemsUpdate();
+        if (this.callbackFnAfterSystemsUpdate) {
+          this.callbackFnAfterSystemsUpdate();
+        }
+      } finally {
+        exitFrame();
       }
 
       this._animationFrameId = requestAnimationFrame(loop);

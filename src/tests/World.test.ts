@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 import { World } from "../World.ts";
 import { System } from "../System.ts";
+import { ComponentRegistry } from "../ComponentRegistry.ts";
 import { PositionOnScreen, Renderable } from "../fixtures.ts";
 
 class CountingSystem extends System {
@@ -306,5 +307,119 @@ describe("World", () => {
       expect(world.frameNo).toBe(3);
       expect(world.fps).toBe(3);
     });
+  });
+});
+
+describe("frame guard", () => {
+  const registry = ComponentRegistry.getInstance();
+  let callbacks: FrameRequestCallback[];
+  let originalRaf: typeof requestAnimationFrame;
+  let originalCaf: typeof cancelAnimationFrame;
+
+  beforeEach(() => {
+    registry.reset();
+    callbacks = [];
+    originalRaf = globalThis.requestAnimationFrame;
+    originalCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = vi.fn((cb: FrameRequestCallback) => {
+      callbacks.push(cb);
+      return callbacks.length;
+    }) as unknown as typeof requestAnimationFrame;
+    globalThis.cancelAnimationFrame = vi.fn() as unknown as typeof cancelAnimationFrame;
+  });
+
+  afterEach(() => {
+    globalThis.requestAnimationFrame = originalRaf;
+    globalThis.cancelAnimationFrame = originalCaf;
+  });
+
+  const runFrame = (now = 16) => {
+    const callback = callbacks.shift();
+    if (!callback) {
+      throw new Error("No frame queued.");
+    }
+    callback(now);
+  };
+
+  it("reset() from a system throws, leaves the registry unchanged, and works after the frame", () => {
+    const world = new World();
+    world.registerComponent(PositionOnScreen);
+    class ResettingSystem extends System {
+      public update(): void {
+        registry.reset();
+      }
+    }
+    world.createSystem(ResettingSystem, world.createQuery("q", {}));
+    world.start();
+    const count = registry.getComponentCount();
+    const generation = registry.generation;
+
+    expect(() => runFrame()).toThrow(/reset\(\) was called while a World frame is running/);
+    expect(registry.getComponentCount()).toBe(count);
+    expect(registry.generation).toBe(generation);
+    expect(() => registry.reset()).not.toThrow();
+    expect(registry.generation).toBe(generation + 1);
+  });
+
+  it("reset() from callbackFnAfterSystemsUpdate throws", () => {
+    const world = new World();
+    world.start({ callbackFnAfterSystemsUpdate: () => registry.reset() });
+
+    expect(() => runFrame()).toThrow(/while a World frame is running/);
+    expect(() => registry.reset()).not.toThrow();
+  });
+
+  it("a system that throws an unrelated error releases the guard", () => {
+    const world = new World();
+    class BrokenSystem extends System {
+      public update(): void {
+        throw new Error("boom");
+      }
+    }
+    world.createSystem(BrokenSystem, world.createQuery("q", {}));
+    world.start();
+
+    expect(() => runFrame()).toThrow("boom");
+    expect(() => registry.reset()).not.toThrow();
+  });
+
+  it("a one-shot system that calls reset() makes start() throw and requests no frame", () => {
+    const world = new World();
+    class ResettingOnceSystem extends System {
+      public update(): void {
+        registry.reset();
+      }
+    }
+    world.createSystem(ResettingOnceSystem, world.createQuery("q", {})).runOnlyOnce();
+
+    expect(() => world.start()).toThrow(/while a World frame is running/);
+    expect(callbacks.length).toBe(0);
+    expect(() => registry.reset()).not.toThrow();
+  });
+
+  it("reset() deferred with queueMicrotask runs after the frame", async () => {
+    const world = new World();
+    world.registerComponent(PositionOnScreen);
+    let resetDone = false;
+    class DeferringSystem extends System {
+      public update(): void {
+        queueMicrotask(() => {
+          registry.reset();
+          resetDone = true;
+        });
+      }
+    }
+    world.createSystem(DeferringSystem, world.createQuery("q", {}));
+    world.start();
+
+    expect(() => runFrame()).not.toThrow();
+    expect(resetDone).toBe(false);
+    await Promise.resolve();
+    expect(resetDone).toBe(true);
+
+    const fresh = new World();
+    fresh.registerComponent(PositionOnScreen);
+    const entity = fresh.createEntity("e").addComponent(PositionOnScreen, { x: 0, y: 0 });
+    expect(entity.hasComponent(PositionOnScreen)).toBe(true);
   });
 });
