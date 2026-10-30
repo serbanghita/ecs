@@ -37,7 +37,7 @@ export class Entity {
       instance = new componentDeclaration(properties);
     }
 
-    if (Object.hasOwn(instance, "bitIndex")) {
+    if (Object.prototype.hasOwnProperty.call(instance, "bitIndex")) {
       throw new Error(`Component ${componentDeclaration.name} must not declare its own "bitIndex" field; it is assigned by the ComponentRegistry.`);
     }
 
