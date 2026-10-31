@@ -7,5 +7,11 @@ export default defineConfig({
   test: {
     globals: true,
     alias: {},
+    // *.test-d.ts files are type-checked (not executed) under a strict tsconfig,
+    // so signature regressions that only strict consumers hit are caught here.
+    typecheck: {
+      enabled: true,
+      tsconfig: "./tsconfig.typecheck.json",
+    },
   },
 });

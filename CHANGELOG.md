@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Under `strictFunctionTypes`, `registerComponentGroup`, `registerComponents`, `World.registerComponents`, `Entity.hasComponent` and `Entity.removeComponent` rejected component classes whose props have required fields (`Type 'typeof X' is not assignable to type 'ComponentConstructor<object, Component<object>>'`). They now take `AnyComponentConstructor`, which every `Component` subclass satisfies; `registerComponent` returns the class it was given with its own type
+
+### Changed
+- Documented a 2.0.0 change that the 2.0.0 entry missed: `Entity.addComponent` requires the props argument unless the component's props type accepts `{}` (tag components, all-optional props). 1.x accepted `addComponent(Idle)` for any component. Migration: pass the props, or give components that build their own `properties` in `init()` a constructor with an optional `Partial<Props>` parameter
+
+### Added
+- `AnyComponentConstructor` and `ComponentConstructor` type exports
+- Type tests (`src/tests/*.test-d.ts`) checked by vitest under a strict tsconfig (`tsconfig.typecheck.json`)
+
 ## [2.1.1] - 2026-10-30
 
 ### Fixed

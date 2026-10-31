@@ -1,0 +1,13 @@
+{
+  // Used by vitest's typecheck mode for src/tests/*.test-d.ts. Strict on purpose:
+  // consumers compile with "strict": true and must see no errors from our types.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["./src/tests/**/*.test-d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

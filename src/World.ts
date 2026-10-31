@@ -3,7 +3,7 @@ import { Entity } from "./Entity.ts";
 import { System } from "./System.ts";
 import { Query, IQueryFilters } from "./Query.ts";
 import { Component } from "./Component.ts";
-import { ComponentRegistry, ComponentConstructor, bitIndexOf } from "./ComponentRegistry.ts";
+import { ComponentRegistry, AnyComponentConstructor, bitIndexOf } from "./ComponentRegistry.ts";
 import { enterFrame, exitFrame } from "./frameGuard.ts";
 
 export type WorldStartOptions = {
@@ -37,12 +37,12 @@ export class World {
   private _loopId: number = 0;
 
   // Shortcut to ComponentRegistry
-  public registerComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp) {
+  public registerComponent<T extends AnyComponentConstructor>(componentDeclaration: T) {
     this.declarations.components.registerComponent(componentDeclaration);
   }
 
   // Shortcut to ComponentRegistry
-  public registerComponents(componentDeclarations: ComponentConstructor[]) {
+  public registerComponents(componentDeclarations: AnyComponentConstructor[]) {
     this.declarations.components.registerComponents(componentDeclarations);
   }
 

@@ -1,6 +1,6 @@
 import { bitset } from "@serbanghita-gamedev/bitmask";
 import { Component } from "./Component.ts";
-import { bitIndexOf } from "./ComponentRegistry.ts";
+import { AnyComponentConstructor, bitIndexOf } from "./ComponentRegistry.ts";
 import { World } from "./World.ts";
 
 export class Entity {
@@ -24,7 +24,7 @@ export class Entity {
   ) {
     this.world.assertRegistryIsCurrent();
 
-    const bitIndex = bitIndexOf(componentDeclaration as unknown as typeof Component);
+    const bitIndex = bitIndexOf(componentDeclaration);
     if (typeof bitIndex === "undefined") {
       throw new Error(`Please register the component ${componentDeclaration.name} in the ComponentRegistry.`);
     }
@@ -50,7 +50,7 @@ export class Entity {
       if (group && group.options.mutuallyExclusive && bitset.hasAnyBits(this.componentsBitset, group.bitset)) {
         for (const groupComponent of group.components) {
           if (groupComponent !== componentDeclaration && this.hasComponent(groupComponent)) {
-            this.removeComponent(groupComponent as new (properties: TProps) => TComp);
+            this.removeComponent(groupComponent);
           }
         }
       }
@@ -65,7 +65,12 @@ export class Entity {
   }
 
   public getComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(declaration: new (properties: TProps) => TComp) {
-    const instance = this.components.get(declaration.name) as InstanceType<new (properties: TProps) => TComp>;
+    return this.getStoredInstance(declaration) as InstanceType<new (properties: TProps) => TComp>;
+  }
+
+  /** The instance stored for exactly this class; a same-named instance of another class does not count. */
+  private getStoredInstance(declaration: AnyComponentConstructor): Component<NonNullable<object>> {
+    const instance = this.components.get(declaration.name);
     if (!instance || instance.constructor !== declaration) {
       throw new Error(`Component requested ${declaration.name} is non-existent.`);
     }
@@ -80,13 +85,13 @@ export class Entity {
     return instance;
   }
 
-  public removeComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp): Entity {
+  public removeComponent(componentDeclaration: AnyComponentConstructor): Entity {
     this.world.assertRegistryIsCurrent();
     if (!this.hasComponent(componentDeclaration)) {
       return this;
     }
-    const component = this.getComponent(componentDeclaration);
-    const bitIndex = bitIndexOf(componentDeclaration as unknown as typeof Component) as number;
+    const component = this.getStoredInstance(componentDeclaration);
+    const bitIndex = bitIndexOf(componentDeclaration) as number;
 
     bitset.clearBit(this.componentsBitset, bitIndex);
     this.components.delete(componentDeclaration.name);
@@ -95,9 +100,9 @@ export class Entity {
     return this;
   }
 
-  public hasComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp): boolean {
+  public hasComponent(componentDeclaration: AnyComponentConstructor): boolean {
     this.world.assertRegistryIsCurrent();
-    const bitIndex = bitIndexOf(componentDeclaration as unknown as typeof Component);
+    const bitIndex = bitIndexOf(componentDeclaration);
     if (typeof bitIndex === "undefined") {
       throw new Error(`Please register the component ${componentDeclaration.name} in the ComponentRegistry.`);
     }

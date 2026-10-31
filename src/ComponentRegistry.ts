@@ -7,12 +7,21 @@ export type ComponentConstructor<
   TComp extends Component<TProps> = Component<TProps>,
 > = new (properties: TProps) => TComp;
 
+/**
+ * Any component class, whatever props its constructor takes. The parameter is
+ * `never`, so every `Component` subclass is assignable, including classes whose
+ * props have required fields (under `strictFunctionTypes` those are not
+ * assignable to `ComponentConstructor`). Use it where only class identity is
+ * needed: registration, groups, queries, `hasComponent`, `removeComponent`.
+ */
+export type AnyComponentConstructor = new (properties: never) => Component<NonNullable<object>>;
+
 export type ComponentGroupOptions = {
   mutuallyExclusive?: boolean;
 };
 
 export type ComponentGroup = {
-  components: ComponentConstructor[];
+  components: AnyComponentConstructor[];
   bitset: bitset.Bitset;
   options: ComponentGroupOptions;
 };
@@ -23,7 +32,7 @@ const WORD_BITS = 32;
  * The bit index the registry assigned to exactly this class, or `undefined`.
  * Subclasses do not inherit their parent's index.
  */
-export function bitIndexOf(componentDeclaration: typeof Component): number | undefined {
+export function bitIndexOf(componentDeclaration: AnyComponentConstructor): number | undefined {
   return ComponentRegistry.getInstance().indexOf(componentDeclaration);
 }
 
@@ -55,7 +64,7 @@ export class ComponentRegistry {
     return this._generation;
   }
 
-  public indexOf(componentDeclaration: ComponentConstructor | typeof Component): number | undefined {
+  public indexOf(componentDeclaration: AnyComponentConstructor): number | undefined {
     return this.bitIndexByConstructor.get(componentDeclaration as typeof Component);
   }
 
@@ -64,7 +73,7 @@ export class ComponentRegistry {
    * is a no-op that keeps its existing index. Two distinct classes sharing a
    * name are rejected because entities store components by name.
    */
-  public registerComponent<TProps extends NonNullable<object>, TComp extends Component<TProps>>(componentDeclaration: new (properties: TProps) => TComp) {
+  public registerComponent<T extends AnyComponentConstructor>(componentDeclaration: T): T {
     const declaration = componentDeclaration as unknown as typeof Component;
 
     if (typeof declaration !== "function" || !("bitIndex" in Object(declaration.prototype))) {
@@ -93,7 +102,7 @@ export class ComponentRegistry {
     return componentDeclaration;
   }
 
-  public registerComponents<T extends Array<ComponentConstructor>>(componentDeclarations: [...T]) {
+  public registerComponents(componentDeclarations: AnyComponentConstructor[]) {
     componentDeclarations.forEach((declaration) => {
       this.registerComponent(declaration);
     });
@@ -112,7 +121,7 @@ export class ComponentRegistry {
     return this.bitIndexToComponentMap.get(bitIndex);
   }
 
-  public registerComponentGroup<T extends Array<ComponentConstructor>>(groupName: string, components: [...T], options: ComponentGroupOptions = {}) {
+  public registerComponentGroup(groupName: string, components: AnyComponentConstructor[], options: ComponentGroupOptions = {}) {
     const bitIndices = components.map((component) => {
       const bitIndex = this.indexOf(component);
       if (typeof bitIndex === "undefined") {
